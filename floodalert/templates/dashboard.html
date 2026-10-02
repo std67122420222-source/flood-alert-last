@@ -1,0 +1,953 @@
+{% extends "base.html" %}
+
+{% block title %}FloodAlert — Dashboard{% endblock %}
+
+{% block content %}
+<div class="dashboard-shell">
+    <section class="dashboard-hero mb-4">
+        <div class="dashboard-hero-copy">
+            <div class="eyebrow">FLOOD ALERT / MONITORING CENTER</div>
+            <h1 class="dashboard-title mb-2">Dashboard สถานการณ์อากาศ</h1>
+            <p class="dashboard-subtitle mb-0">
+                {% if is_public_dashboard %}
+                    ติดตาม Forecast 24 ชั่วโมง แผนที่ และประกาศเตือนภัยได้โดยไม่ต้อง Login
+                {% else %}
+                    ติดตามพื้นที่ของคุณด้วยข้อมูล Forecast 24 ชั่วโมง กราฟ แผนที่ และประกาศเตือนภัย
+                {% endif %}
+            </p>
+        </div>
+
+        <div class="dashboard-hero-meta">
+            <div class="hero-meta-item">
+                <span class="hero-meta-label">แหล่งข้อมูล</span>
+                <strong>กรมอุตุนิยมวิทยา (TMD)</strong>
+            </div>
+            <div class="hero-meta-item">
+                <span class="hero-meta-label">อัปเดตหน้าเว็บ</span>
+                <strong id="dashboard-updated">กำลังโหลด...</strong>
+            </div>
+            <button type="button" id="refresh-dashboard" class="btn btn-light btn-sm hero-refresh">
+                ↻ รีเฟรชข้อมูล
+            </button>
+        </div>
+    </section>
+
+    <section class="risk-banner risk-pending mb-4" id="overall-risk-banner">
+        <div class="risk-banner-icon" id="overall-risk-icon">⚪</div>
+        <div class="risk-banner-main">
+            <div class="risk-banner-kicker">ภาพรวมระดับเฝ้าระวังของระบบ</div>
+            <div class="risk-banner-title" id="overall-risk">รอข้อมูล</div>
+            <div class="risk-banner-note" id="overall-risk-note">
+                กำลังประเมินข้อมูล Forecast ที่มีอยู่
+            </div>
+        </div>
+        <div class="risk-banner-stats">
+            <div>
+                <span>ช่วง Forecast</span>
+                <strong id="overall-items">-</strong>
+            </div>
+            <div>
+                <span>ฝนสูงสุด/ชม.</span>
+                <strong id="overall-max-rain">-</strong>
+            </div>
+            <div>
+                <span>ลมสูงสุด</span>
+                <strong id="overall-max-wind">-</strong>
+            </div>
+        </div>
+    </section>
+
+    <section class="dashboard-stats mb-4">
+        <div class="stat-card stat-main">
+            <div class="stat-icon stat-icon-primary">📍</div>
+            <div>
+                <div class="stat-label">พื้นที่ทั้งหมด</div>
+                <div id="stat-total" class="stat-value">-</div>
+                <div class="stat-note">พื้นที่ที่มี Forecast ในระบบ</div>
+            </div>
+        </div>
+
+        <div class="stat-card stat-green-card">
+            <div class="stat-icon">🟢</div>
+            <div>
+                <div class="stat-label">ปกติ</div>
+                <div id="stat-green" class="stat-value">-</div>
+            </div>
+        </div>
+
+        <div class="stat-card stat-yellow-card">
+            <div class="stat-icon">🟡</div>
+            <div>
+                <div class="stat-label">เฝ้าระวัง</div>
+                <div id="stat-yellow" class="stat-value">-</div>
+            </div>
+        </div>
+
+        <div class="stat-card stat-orange-card">
+            <div class="stat-icon">🟠</div>
+            <div>
+                <div class="stat-label">ระวังสูง</div>
+                <div id="stat-orange" class="stat-value">-</div>
+            </div>
+        </div>
+
+        <div class="stat-card stat-red-card">
+            <div class="stat-icon">🔴</div>
+            <div>
+                <div class="stat-label">ระดับรุนแรง</div>
+                <div id="stat-red" class="stat-value">-</div>
+            </div>
+        </div>
+
+        <div class="stat-card stat-pending-card">
+            <div class="stat-icon">⚪</div>
+            <div>
+                <div class="stat-label">รอข้อมูล</div>
+                <div id="stat-pending" class="stat-value">-</div>
+            </div>
+        </div>
+    </section>
+
+    {% if current_user.is_authenticated %}
+    <section class="card dashboard-card tracking-card p-4 mb-4">
+        <div class="section-heading mb-3">
+            <div>
+                <div class="section-kicker">PERSONAL TRACKING</div>
+                <h5 class="mb-1">📍 เพิ่มพื้นที่ที่ต้องการติดตาม</h5>
+                <p class="section-description mb-0">เลือกจังหวัด อำเภอ และตำบลเพื่อบันทึกพื้นที่ของคุณ</p>
+            </div>
+            <span class="section-badge">LOGIN</span>
+        </div>
+
+        <form method="POST" action="{{ url_for('main.add_area') }}" id="tracking-form">
+            <div class="row g-3 align-items-end">
+                <div class="col-lg-4">
+                    <label for="province" class="form-label">จังหวัด</label>
+                    <input id="province" name="province" class="form-control form-control-lg" list="province-list" placeholder="พิมพ์หรือเลือกจังหวัด" autocomplete="off" required>
+                    <datalist id="province-list">
+                        {% for province in provinces %}
+                            <option value="{{ province }}"></option>
+                        {% endfor %}
+                    </datalist>
+                </div>
+
+                <div class="col-lg-4">
+                    <label for="district" class="form-label">อำเภอ / เขต</label>
+                    <input id="district" name="district" class="form-control form-control-lg" list="district-list" placeholder="เลือกจังหวัดก่อน" autocomplete="off">
+                    <datalist id="district-list"></datalist>
+                </div>
+
+                <div class="col-lg-3">
+                    <label for="subdistrict" class="form-label">ตำบล / แขวง</label>
+                    <input id="subdistrict" name="subdistrict" class="form-control form-control-lg" list="subdistrict-list" placeholder="เลือกอำเภอก่อน" autocomplete="off">
+                    <datalist id="subdistrict-list"></datalist>
+                </div>
+
+                <div class="col-lg-1">
+                    <button type="submit" class="btn btn-primary btn-lg w-100">+</button>
+                </div>
+            </div>
+            <div id="location-help" class="small text-muted mt-2">
+                เลือกจังหวัดเพื่อโหลดรายการอำเภอ/เขต แล้วเลือกอำเภอเพื่อโหลดตำบล/แขวง
+            </div>
+        </form>
+    </section>
+    {% endif %}
+
+    {% if current_user.is_authenticated %}
+    <section class="card dashboard-card p-4 mb-4">
+        <div class="section-heading">
+            <div>
+                <div class="section-kicker">MY AREAS</div>
+                <h5 class="mb-1">ภาพรวมพื้นที่ของฉัน</h5>
+                <p class="section-description mb-0">ค้นหา กรองสถานะ และเปิด Forecast ของแต่ละพื้นที่</p>
+            </div>
+            <button type="button" class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#overviewModal">
+                🌤️ เปิดภาพรวม
+            </button>
+        </div>
+    </section>
+
+    <div class="modal fade" id="overviewModal" tabindex="-1" aria-labelledby="overviewModalLabel" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-scrollable">
+            <div class="modal-content overview-modal-content">
+                <div class="modal-header">
+                    <div>
+                        <div class="section-kicker">MY AREAS / OVERVIEW</div>
+                        <h5 class="modal-title" id="overviewModalLabel">🌤️ ภาพรวมพื้นที่ทั้งหมด</h5>
+                    </div>
+                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+
+                <div class="modal-body">
+                    <div class="overview-summary-bar mb-3">
+                        <div><span>ทั้งหมด</span><strong id="overview-total">0</strong></div>
+                        <div><span>ปกติ</span><strong id="overview-green">0</strong></div>
+                        <div><span>เฝ้าระวัง</span><strong id="overview-yellow">0</strong></div>
+                        <div><span>ระวังสูง</span><strong id="overview-orange">0</strong></div>
+                        <div><span>รุนแรง</span><strong id="overview-red">0</strong></div>
+                        <div><span>รอข้อมูล</span><strong id="overview-pending">0</strong></div>
+                    </div>
+
+                    <div class="overview-toolbar mb-3">
+                        <div class="overview-search-wrap">
+                            <span class="overview-search-icon">⌕</span>
+                            <input type="search" id="overview-search" class="form-control" placeholder="ค้นหาจังหวัด อำเภอ หรือ ตำบล">
+                        </div>
+                        <select id="overview-status-filter" class="form-select overview-status-filter">
+                            <option value="all">ทุกสถานะ</option>
+                            <option value="green">🟢 ปกติ</option>
+                            <option value="yellow">🟡 เฝ้าระวัง</option>
+                            <option value="orange">🟠 ระวังสูง</option>
+                            <option value="red">🔴 รุนแรง</option>
+                            <option value="pending">⚪ รอข้อมูล</option>
+                        </select>
+                    </div>
+
+                    <div class="overview-table-wrap">
+                        <div class="overview-list">
+                            <div class="overview-row overview-header">
+                                <div class="overview-location">พื้นที่</div>
+                                <div>สถานะ</div>
+                                <div>อุณหภูมิ</div>
+                                <div>ฝน</div>
+                                <div>ความชื้น</div>
+                                <div>ลม</div>
+                                <div>จัดการ</div>
+                            </div>
+
+                            {% for area in areas %}
+                            <div class="overview-row summary-card" data-area-id="{{ area.id }}" data-search="{{ area.province }} {{ area.district or '' }} {{ area.subdistrict or '' }}" data-status="pending">
+                                <div class="overview-location">
+                                    <div class="summary-location overview-place">📍 {{ area.province }}</div>
+                                    <div class="text-muted small overview-subplace">
+                                        {{ area.district or 'ทั้งจังหวัด' }}{% if area.subdistrict %} · {{ area.subdistrict }}{% endif %}
+                                    </div>
+                                </div>
+                                <div class="overview-status-cell"><span class="summary-status status-pending compact-status">⚪ รอข้อมูล</span></div>
+                                <div class="overview-metric"><strong class="summary-temperature">-</strong></div>
+                                <div class="overview-metric"><strong class="summary-rain">-</strong></div>
+                                <div class="overview-metric"><strong class="summary-humidity">-</strong></div>
+                                <div class="overview-metric"><strong class="summary-wind">-</strong></div>
+                                <div class="overview-actions">
+                                    <button type="button" class="btn btn-outline-primary btn-sm summary-open">Forecast</button>
+                                    <form method="POST" action="{{ url_for('main.delete_area', area_id=area.id) }}" class="d-inline" onsubmit="return confirm('ต้องการลบพื้นที่นี้ใช่หรือไม่?');">
+                                        <button type="submit" class="btn btn-outline-danger btn-sm">ลบ</button>
+                                    </form>
+                                </div>
+                            </div>
+                            {% else %}
+                            <div class="overview-empty">ยังไม่มีพื้นที่ที่ติดตาม</div>
+                            {% endfor %}
+                        </div>
+                    </div>
+                    <div id="overview-filter-empty" class="overview-empty d-none">ไม่พบพื้นที่ตามเงื่อนไขที่ค้นหา</div>
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+
+    <section class="card dashboard-card p-4 mb-4">
+        <div class="section-heading mb-3">
+            <div>
+                <div class="section-kicker">24H FORECAST</div>
+                <h5 class="mb-1">🕐 พยากรณ์อากาศ 24 ชั่วโมง</h5>
+                <p id="selected-area-title" class="section-description mb-0">เลือกพื้นที่เพื่อดูรายละเอียด</p>
+            </div>
+            <div class="forecast-selector-wrap">
+                <label for="area-selector" class="visually-hidden">เลือกพื้นที่</label>
+                <select id="area-selector" class="form-select area-selector" {% if not areas and not is_public_dashboard %}disabled{% endif %}>
+                    {% for area in areas %}
+                        <option value="{{ area.id }}" data-province="{{ area.province }}" data-district="{{ area.district or '' }}" data-subdistrict="{{ area.subdistrict or '' }}">
+                            {{ area.province }}{% if area.district %} - {{ area.district }}{% endif %}{% if area.subdistrict %} - {{ area.subdistrict }}{% endif %}
+                        </option>
+                    {% else %}
+                        {% if is_public_dashboard %}
+                            <option value="">กำลังโหลดพื้นที่สาธารณะ...</option>
+                        {% else %}
+                            <option value="">ยังไม่มีพื้นที่</option>
+                        {% endif %}
+                    {% endfor %}
+                </select>
+            </div>
+        </div>
+
+        {% if is_public_dashboard %}
+        <div class="public-mode-note mb-3">
+            <div class="public-mode-icon">🌐</div>
+            <div>
+                <strong>โหมด Dashboard สาธารณะ</strong>
+                <div class="small">ดู Forecast ได้ทันที ส่วนการเพิ่มและลบพื้นที่เป็นฟังก์ชันสำหรับสมาชิก</div>
+            </div>
+            <a href="{{ url_for('auth.login') }}" class="btn btn-primary btn-sm ms-auto">เข้าสู่ระบบ</a>
+        </div>
+        {% endif %}
+
+        <div id="forecast-message" class="system-message message-neutral mb-3">กำลังโหลดข้อมูล...</div>
+
+        <div class="current-metrics-grid mb-3">
+            <div class="current-card">
+                <div class="metric-symbol">🌡️</div>
+                <div class="metric-label">อุณหภูมิ</div>
+                <div id="current-temperature" class="metric-value">-</div>
+            </div>
+            <div class="current-card">
+                <div class="metric-symbol">🌧️</div>
+                <div class="metric-label">ฝน</div>
+                <div id="current-rainfall" class="metric-value">-</div>
+            </div>
+            <div class="current-card">
+                <div class="metric-symbol">💧</div>
+                <div class="metric-label">ความชื้น</div>
+                <div id="current-humidity" class="metric-value">-</div>
+            </div>
+            <div class="current-card">
+                <div class="metric-symbol">💨</div>
+                <div class="metric-label">ลม</div>
+                <div id="current-wind" class="metric-value">-</div>
+            </div>
+        </div>
+
+        <div class="forecast-detail-grid mb-3">
+            <div class="detail-chip"><span>ความกดอากาศ</span><strong id="current-pressure">-</strong></div>
+            <div class="detail-chip"><span>สภาพอากาศ</span><strong id="current-condition">-</strong></div>
+            <div class="detail-chip"><span>ระดับระบบ</span><strong id="current-status">-</strong></div>
+            <div class="detail-chip"><span>ฝนสะสม 24 ชม.</span><strong id="selected-rain-total">-</strong></div>
+        </div>
+
+        <div class="forecast-chart-toolbar mb-2">
+            <div>
+                <div class="chart-mode-label">📈 แนวโน้ม Forecast</div>
+                <div class="small text-muted">เลื่อนเมาส์บนกราฟเพื่อดูค่าแต่ละช่วงเวลา</div>
+            </div>
+            <div class="chart-mode-buttons" role="group" aria-label="รูปแบบกราฟ">
+                <button type="button" class="btn btn-sm btn-primary chart-mode active" data-mode="all">ทั้งหมด</button>
+                <button type="button" class="btn btn-sm btn-outline-primary chart-mode" data-mode="temperature">🌡️ อุณหภูมิ</button>
+                <button type="button" class="btn btn-sm btn-outline-primary chart-mode" data-mode="rain">🌧️ ฝน</button>
+                <button type="button" class="btn btn-sm btn-outline-primary chart-mode" data-mode="wind">💨 ลม</button>
+                <button type="button" class="btn btn-sm btn-outline-primary chart-mode" data-mode="humidity">💧 ความชื้น</button>
+            </div>
+        </div>
+
+        <div class="chart-wrapper"><canvas id="forecast-chart"></canvas></div>
+        <div id="selected-forecast-updated" class="small text-muted mt-2">-</div>
+
+        <div class="forecast-timeline-wrap mt-4">
+            <div class="timeline-heading">ชั่วโมงถัดไป</div>
+            <div id="forecast-timeline" class="forecast-timeline"></div>
+        </div>
+    </section>
+
+    <section class="card dashboard-card p-4 mb-4">
+        <div class="section-heading mb-3">
+            <div>
+                <div class="section-kicker">LIVE MAP</div>
+                <h5 class="mb-1">🗺️ แผนที่สถานการณ์ Forecast</h5>
+                <p class="section-description mb-0">คลิก Marker เพื่อดูรายละเอียดของพื้นที่</p>
+            </div>
+            <div class="map-legend">
+                <span class="legend-item"><i class="legend-dot status-green"></i> ปกติ</span>
+                <span class="legend-item"><i class="legend-dot status-yellow"></i> เฝ้าระวัง</span>
+                <span class="legend-item"><i class="legend-dot status-orange"></i> ระวังสูง</span>
+                <span class="legend-item"><i class="legend-dot status-red"></i> รุนแรง</span>
+                <span class="legend-item"><i class="legend-dot status-pending"></i> รอข้อมูล</span>
+            </div>
+        </div>
+        <div id="forecast-map"></div>
+    </section>
+
+    <section class="card dashboard-card warning-panel p-4">
+        <div class="warning-panel-header">
+            <div>
+                <div class="section-kicker">OFFICIAL WARNING</div>
+                <h5 class="mb-1">⚠️ ประกาศเตือนภัยลักษณะอากาศ</h5>
+                <p class="section-description mb-0">ข้อมูลประกาศจาก TMD / ระบบจะแยกจากระดับเฝ้าระวังที่คำนวณจาก Forecast</p>
+            </div>
+            <div class="d-flex align-items-center gap-2 flex-wrap">
+                <span class="source-pill">TMD</span>
+                <a href="{{ url_for('main.dashboard', warning_refresh=1) }}" class="btn btn-outline-primary btn-sm">↻ โหลดใหม่</a>
+                <a href="https://www.tmd.go.th/warning-and-events/warning-storm" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">ดูประกาศ TMD ↗</a>
+            </div>
+        </div>
+
+        {% set warning_items = warnings.get("items", []) %}
+        {% if warnings.get("ok", false) and warning_items %}
+            <div class="warning-toolbar mt-3">
+                <span class="warning-toolbar-label">ประกาศล่าสุด</span>
+                <span class="warning-count">{{ warning_items|length }} รายการ</span>
+            </div>
+
+            <div class="warning-list mt-2">
+                {% for item in warning_items[:5] %}
+                <article class="warning-item">
+                    <div class="warning-item-topline">
+                        <span class="warning-badge">⚠️ {{ item.category|default('ประกาศเตือนภัย', true) }}</span>
+                        {% if item.published_at %}<span class="warning-date">{{ item.published_at }}</span>{% endif %}
+                    </div>
+                    <h6 class="warning-title">{{ item.title }}</h6>
+                    <p class="warning-summary">{{ item.headline or item.detail|truncate(260, true) }}</p>
+                    <div class="warning-meta">
+                        <span>หน่วยงาน: {{ item.agency|default('กรมอุตุนิยมวิทยา', true) }}</span>
+                        {% if item.issue_no %}<span>เลขที่: {{ item.issue_no }}</span>{% endif %}
+                    </div>
+                    <div class="warning-footer">
+                        <span class="warning-source">แหล่งข้อมูล: TMD</span>
+                        <div class="d-flex gap-2">
+                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#warningDetailModal-{{ loop.index }}">อ่านรายละเอียด</button>
+                            <a href="{{ item.source_url|default('https://www.tmd.go.th/warning-and-events/warning-storm', true) }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary btn-sm">TMD ↗</a>
+                        </div>
+                    </div>
+                </article>
+
+                <div class="modal fade" id="warningDetailModal-{{ loop.index }}" tabindex="-1" aria-hidden="true">
+                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
+                        <div class="modal-content overview-modal-content">
+                            <div class="modal-header">
+                                <div>
+                                    <div class="section-kicker">TMD WARNING</div>
+                                    <h5 class="modal-title">⚠️ {{ item.title }}</h5>
+                                </div>
+                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                            </div>
+                            <div class="modal-body">
+                                <div class="warning-detail-meta">
+                                    <div>วันที่ข้อมูล: <strong>{{ item.published_at|default('-', true) }}</strong></div>
+                                    <div>หมวดหมู่: <strong>{{ item.category|default('ประกาศเตือนภัย', true) }}</strong></div>
+                                    <div>หน่วยงาน: <strong>{{ item.agency|default('กรมอุตุนิยมวิทยา', true) }}</strong></div>
+                                    {% if item.issue_no %}<div>เลขที่ประกาศ: <strong>{{ item.issue_no }}</strong></div>{% endif %}
+                                    {% if item.effect_start_at %}<div>เริ่มมีผล: <strong>{{ item.effect_start_at }}</strong></div>{% endif %}
+                                    {% if item.effect_end_at %}<div>สิ้นสุด: <strong>{{ item.effect_end_at }}</strong></div>{% endif %}
+                                    {% if item.contact %}<div>ติดต่อ: <strong>{{ item.contact }}</strong></div>{% endif %}
+                                </div>
+                                <div class="warning-detail-body mt-4">{{ item.detail }}</div>
+                                {% if item.warnings %}<div class="warning-detail-body mt-3">{{ item.warnings }}</div>{% endif %}
+                                <div class="mt-4 d-flex gap-2 flex-wrap">
+                                    <a href="{{ item.source_url|default('https://www.tmd.go.th/warning-and-events/warning-storm', true) }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">เปิดประกาศฉบับเต็มจาก TMD</a>
+                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+
+            {% if warning_items|length > 5 %}
+            <div class="text-center mt-3">
+                <a href="https://www.tmd.go.th/warning-and-events/warning-storm" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm">ดูประกาศทั้งหมดบน TMD</a>
+            </div>
+            {% endif %}
+        {% else %}
+            <div class="warning-empty mt-3">
+                <div class="warning-empty-icon">⚠️</div>
+                <div>
+                    <h6 class="mb-1">ยังไม่มีประกาศเตือนภัยที่ดึงได้</h6>
+                    <p class="mb-3 text-muted">ระบบยังไม่มีข้อมูลประกาศล่าสุดในฐานข้อมูล สามารถเปิดหน้า TMD เพื่อดูประกาศอย่างเป็นทางการได้</p>
+                    <a href="https://www.tmd.go.th/warning-and-events/warning-storm" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">เปิดประกาศเตือนภัย TMD</a>
+                </div>
+            </div>
+        {% endif %}
+    </section>
+
+    <div class="dashboard-disclaimer mt-4">
+        <span>ⓘ</span>
+        <div>
+            <strong>หมายเหตุการตีความข้อมูล</strong>
+            <p class="mb-0">ระดับสีบน Dashboard เป็นตัวชี้วัดที่ระบบคำนวณจากข้อมูล Forecast เพื่อช่วยติดตามสถานการณ์ และไม่ใช่ประกาศเตือนภัยอย่างเป็นทางการของหน่วยงานรัฐ</p>
+        </div>
+    </div>
+</div>
+{% endblock %}
+
+{% block scripts %}
+<script>
+    const provinceInput = document.getElementById("province");
+    const districtInput = document.getElementById("district");
+    const subdistrictInput = document.getElementById("subdistrict");
+    const districtList = document.getElementById("district-list");
+    const subdistrictList = document.getElementById("subdistrict-list");
+    const locationHelp = document.getElementById("location-help");
+
+    const areaSelector = document.getElementById("area-selector");
+    const forecastMessage = document.getElementById("forecast-message");
+    const selectedAreaTitle = document.getElementById("selected-area-title");
+    const dashboardUpdated = document.getElementById("dashboard-updated");
+    const selectedForecastUpdated = document.getElementById("selected-forecast-updated");
+    const forecastTimeline = document.getElementById("forecast-timeline");
+
+    const temperatureElement = document.getElementById("current-temperature");
+    const rainfallElement = document.getElementById("current-rainfall");
+    const humidityElement = document.getElementById("current-humidity");
+    const windElement = document.getElementById("current-wind");
+    const pressureElement = document.getElementById("current-pressure");
+    const conditionElement = document.getElementById("current-condition");
+    const statusElement = document.getElementById("current-status");
+    const selectedRainTotal = document.getElementById("selected-rain-total");
+    const chartCanvas = document.getElementById("forecast-chart");
+
+    const overviewSearch = document.getElementById("overview-search");
+    const overviewStatusFilter = document.getElementById("overview-status-filter");
+    const overviewFilterEmpty = document.getElementById("overview-filter-empty");
+    const refreshDashboardButton = document.getElementById("refresh-dashboard");
+
+    const isPublicDashboard = {{ "true" if is_public_dashboard else "false" }};
+
+    let forecastChart = null;
+    let currentForecastItems = [];
+    let allForecastAreas = [];
+    let mapMarkers = [];
+    let chartMode = "all";
+
+    const statusMeta = {
+        green: { label: "ปกติ", icon: "🟢", className: "status-green" },
+        yellow: { label: "เฝ้าระวัง", icon: "🟡", className: "status-yellow" },
+        orange: { label: "ระวังสูง", icon: "🟠", className: "status-orange" },
+        red: { label: "ระดับรุนแรง", icon: "🔴", className: "status-red" },
+        pending: { label: "รอข้อมูล", icon: "⚪", className: "status-pending" },
+    };
+
+    const statusRank = { pending: -1, green: 0, yellow: 1, orange: 2, red: 3 };
+
+    function populateDatalist(datalist, values) {
+        if (!datalist) return;
+        datalist.replaceChildren();
+        values.forEach((value) => {
+            const option = document.createElement("option");
+            option.value = value;
+            datalist.appendChild(option);
+        });
+    }
+
+    async function loadDistricts() {
+        if (!provinceInput) return;
+        const province = provinceInput.value.trim();
+        districtInput.value = "";
+        subdistrictInput.value = "";
+        districtInput.placeholder = "กำลังโหลดอำเภอ...";
+        subdistrictInput.placeholder = "เลือกอำเภอก่อน";
+        populateDatalist(districtList, []);
+        populateDatalist(subdistrictList, []);
+        if (!province) {
+            districtInput.placeholder = "เลือกจังหวัดก่อน";
+            locationHelp.textContent = "เลือกจังหวัดเพื่อโหลดรายการอำเภอ/เขต";
+            return;
+        }
+        try {
+            const response = await fetch(`{{ url_for('main.api_districts') }}?province=${encodeURIComponent(province)}`);
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) throw new Error(payload.error || "โหลดอำเภอไม่สำเร็จ");
+            populateDatalist(districtList, payload.items || []);
+            districtInput.placeholder = "พิมพ์หรือเลือกอำเภอ / เขต";
+            locationHelp.textContent = `พบ ${payload.items.length} อำเภอ/เขตใน ${province}`;
+        } catch (error) {
+            districtInput.placeholder = "พิมพ์อำเภอเองได้";
+            locationHelp.textContent = `โหลดรายการอำเภอไม่สำเร็จ: ${error.message}`;
+        }
+    }
+
+    async function loadSubdistricts() {
+        if (!provinceInput || !districtInput) return;
+        const province = provinceInput.value.trim();
+        const district = districtInput.value.trim();
+        subdistrictInput.value = "";
+        subdistrictInput.placeholder = "กำลังโหลดตำบล...";
+        populateDatalist(subdistrictList, []);
+        if (!province || !district) {
+            subdistrictInput.placeholder = "เลือกอำเภอก่อน";
+            return;
+        }
+        try {
+            const params = new URLSearchParams({ province, district });
+            const response = await fetch(`{{ url_for('main.api_subdistricts') }}?${params.toString()}`);
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) throw new Error(payload.error || "โหลดตำบลไม่สำเร็จ");
+            populateDatalist(subdistrictList, payload.items || []);
+            subdistrictInput.placeholder = "พิมพ์หรือเลือกตำบล / แขวง";
+        } catch (error) {
+            subdistrictInput.placeholder = "พิมพ์ตำบลเองได้";
+        }
+    }
+
+    provinceInput?.addEventListener("change", loadDistricts);
+    provinceInput?.addEventListener("blur", loadDistricts);
+    districtInput?.addEventListener("change", loadSubdistricts);
+    districtInput?.addEventListener("blur", loadSubdistricts);
+
+    function formatNumber(value, unit = "") {
+        if (value === null || value === undefined || Number.isNaN(Number(value))) return "-";
+        const formatted = Number(value).toFixed(1);
+        return unit ? `${formatted} ${unit}` : formatted;
+    }
+
+    function formatTime(value) {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return date.toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit" });
+    }
+
+    function formatDateTime(value) {
+        if (!value) return "-";
+        const date = new Date(value);
+        if (Number.isNaN(date.getTime())) return value;
+        return date.toLocaleString("th-TH", { dateStyle: "short", timeStyle: "short" });
+    }
+
+    function statusText(status) {
+        const meta = statusMeta[status] || statusMeta.pending;
+        return `${meta.icon} ${meta.label}`;
+    }
+
+    function statusClass(status) {
+        return `status-${status || "pending"}`;
+    }
+
+    function getAreaTitle(area) {
+        return [area.province, area.district, area.subdistrict].filter(Boolean).join(" - ");
+    }
+
+    function summarizeItems(items) {
+        const validRain = items.map((item) => Number(item.rainfall)).filter((value) => Number.isFinite(value));
+        const validWind = items.map((item) => Number(item.wind_speed_kmh)).filter((value) => Number.isFinite(value));
+        let highest = "pending";
+        items.forEach((item) => {
+            const status = item.status || "pending";
+            if ((statusRank[status] ?? -1) > (statusRank[highest] ?? -1)) highest = status;
+        });
+        return {
+            status: highest,
+            rainTotal: validRain.length ? validRain.reduce((a, b) => a + b, 0) : null,
+            maxRain: validRain.length ? Math.max(...validRain) : null,
+            maxWind: validWind.length ? Math.max(...validWind) : null,
+            count: items.length,
+        };
+    }
+
+    function applyRiskBanner(status, summary) {
+        const banner = document.getElementById("overall-risk-banner");
+        const meta = statusMeta[status] || statusMeta.pending;
+        banner.className = `risk-banner risk-${status} mb-4`;
+        document.getElementById("overall-risk-icon").textContent = meta.icon;
+        document.getElementById("overall-risk").textContent = meta.label;
+        document.getElementById("overall-risk-note").textContent = status === "pending"
+            ? "ยังไม่มีข้อมูล Forecast เพียงพอสำหรับการประเมิน"
+            : "เป็นตัวชี้วัดจาก Forecast ของระบบ ไม่ใช่ประกาศเตือนภัยอย่างเป็นทางการ";
+        document.getElementById("overall-items").textContent = summary.count ? `${summary.count} ช่วง` : "-";
+        document.getElementById("overall-max-rain").textContent = summary.maxRain !== null ? `${summary.maxRain.toFixed(1)} mm` : "-";
+        document.getElementById("overall-max-wind").textContent = summary.maxWind !== null ? `${summary.maxWind.toFixed(1)} km/h` : "-";
+    }
+
+    function updateSummaryStats(areas) {
+        const counts = { total: areas.length, green: 0, yellow: 0, orange: 0, red: 0, pending: 0 };
+        let highest = "pending";
+
+        areas.forEach((area) => {
+            const summary = area.risk_summary || summarizeItems(area.items || []);
+            const status = summary.status || "pending";
+            if (counts[status] !== undefined) counts[status] += 1; else counts.pending += 1;
+            if ((statusRank[status] ?? -1) > (statusRank[highest] ?? -1)) {
+                highest = status;
+            }
+        });
+
+        document.getElementById("stat-total").textContent = counts.total;
+        document.getElementById("stat-green").textContent = counts.green;
+        document.getElementById("stat-yellow").textContent = counts.yellow;
+        document.getElementById("stat-orange").textContent = counts.orange;
+        document.getElementById("stat-red").textContent = counts.red;
+        document.getElementById("stat-pending").textContent = counts.pending;
+
+        const allItems = areas.flatMap((area) => area.items || []);
+        const overallSummary = summarizeItems(allItems);
+        applyRiskBanner(highest, overallSummary);
+
+        ["overview-total", "overview-green", "overview-yellow", "overview-orange", "overview-red", "overview-pending"].forEach((id) => {
+            const el = document.getElementById(id);
+            if (el) el.textContent = counts[id.replace("overview-", "")];
+        });
+    }
+
+    function updateAreaSummary(areas) {
+        areas.forEach((area) => {
+            const card = document.querySelector(`.summary-card[data-area-id="${CSS.escape(String(area.area_id))}"]`);
+            if (!card) return;
+            const latest = area.items?.[0];
+            const status = area.risk_summary?.status || latest?.status || "pending";
+            card.dataset.status = status;
+            const badge = card.querySelector(".summary-status");
+            badge.textContent = statusText(status);
+            badge.className = `summary-status compact-status ${statusClass(status)}`;
+            card.querySelector(".summary-temperature").textContent = latest ? formatNumber(latest.temperature, "°C") : "-";
+            card.querySelector(".summary-rain").textContent = latest ? formatNumber(latest.rainfall, "mm") : "-";
+            card.querySelector(".summary-humidity").textContent = latest ? formatNumber(latest.relative_humidity, "%") : "-";
+            card.querySelector(".summary-wind").textContent = latest ? formatNumber(latest.wind_speed_kmh, "km/h") : "-";
+        });
+        applyOverviewFilters();
+    }
+
+    function applyOverviewFilters() {
+        if (!overviewSearch || !overviewStatusFilter || !overviewFilterEmpty) return;
+        const query = overviewSearch.value.trim().toLowerCase();
+        const selectedStatus = overviewStatusFilter.value;
+        const rows = document.querySelectorAll(".overview-row.summary-card");
+        let visibleCount = 0;
+        rows.forEach((row) => {
+            const haystack = (row.dataset.search || "").toLowerCase();
+            const matchesSearch = !query || haystack.includes(query);
+            const matchesStatus = selectedStatus === "all" || (row.dataset.status || "pending") === selectedStatus;
+            const visible = matchesSearch && matchesStatus;
+            row.classList.toggle("d-none", !visible);
+            if (visible) visibleCount += 1;
+        });
+        overviewFilterEmpty.classList.toggle("d-none", visibleCount > 0 || rows.length === 0);
+    }
+
+    overviewSearch?.addEventListener("input", applyOverviewFilters);
+    overviewStatusFilter?.addEventListener("change", applyOverviewFilters);
+
+    function updateCurrentCards(item, summary) {
+        if (!item) {
+            temperatureElement.textContent = "-";
+            rainfallElement.textContent = "-";
+            humidityElement.textContent = "-";
+            windElement.textContent = "-";
+            pressureElement.textContent = "-";
+            conditionElement.textContent = "-";
+            statusElement.textContent = statusText("pending");
+            selectedRainTotal.textContent = "-";
+            selectedForecastUpdated.textContent = "ไม่มีข้อมูล Forecast";
+            return;
+        }
+        temperatureElement.textContent = formatNumber(item.temperature, "°C");
+        rainfallElement.textContent = formatNumber(item.rainfall, "mm");
+        humidityElement.textContent = formatNumber(item.relative_humidity, "%");
+        windElement.textContent = formatNumber(item.wind_speed_kmh, "km/h");
+        pressureElement.textContent = formatNumber(item.pressure, "hPa");
+        conditionElement.textContent = item.condition || "-";
+        statusElement.textContent = statusText(item.status);
+        selectedRainTotal.textContent = summary?.rainTotal !== null && summary?.rainTotal !== undefined ? `${summary.rainTotal.toFixed(1)} mm` : "-";
+        selectedForecastUpdated.textContent = `Forecast ล่าสุด: ${formatDateTime(item.forecast_at)}`;
+    }
+
+    function renderTimeline(items) {
+        if (!forecastTimeline) return;
+        forecastTimeline.replaceChildren();
+        items.slice(0, 8).forEach((item) => {
+            const status = statusMeta[item.status] || statusMeta.pending;
+            const card = document.createElement("div");
+            card.className = "timeline-card";
+            card.innerHTML = `
+                <div class="timeline-time">${escapeHtml(formatTime(item.forecast_at))}</div>
+                <div class="timeline-icon">${status.icon}</div>
+                <div class="timeline-temp">${escapeHtml(formatNumber(item.temperature, "°C"))}</div>
+                <div class="timeline-rain">${escapeHtml(formatNumber(item.rainfall, "mm"))}</div>
+            `;
+            forecastTimeline.appendChild(card);
+        });
+    }
+
+    function chartDataset(mode, items) {
+        const common = { tension: 0.25, pointRadius: 2, pointHoverRadius: 5, borderWidth: 2.5 };
+        const palette = { temperature: "#147D92", rain: "#38BDF8", wind: "#0F2A43", humidity: "#7C3AED" };
+        if (mode === "temperature") return [{ ...common, label: "อุณหภูมิ °C", data: items.map((i) => i.temperature), borderColor: palette.temperature, backgroundColor: "rgba(20,125,146,.10)", pointBackgroundColor: palette.temperature }];
+        if (mode === "rain") return [{ ...common, label: "ฝน mm", data: items.map((i) => i.rainfall), borderColor: palette.rain, backgroundColor: "rgba(56,189,248,.35)", type: "bar", borderRadius: 6 }];
+        if (mode === "wind") return [{ ...common, label: "ลม km/h", data: items.map((i) => i.wind_speed_kmh), borderColor: palette.wind, backgroundColor: "rgba(15,42,67,.10)", pointBackgroundColor: palette.wind }];
+        if (mode === "humidity") return [{ ...common, label: "ความชื้น %", data: items.map((i) => i.relative_humidity), borderColor: palette.humidity, backgroundColor: "rgba(124,58,237,.10)", pointBackgroundColor: palette.humidity }];
+        return [
+            { ...common, label: "อุณหภูมิ °C", data: items.map((i) => i.temperature), borderColor: palette.temperature, backgroundColor: "rgba(20,125,146,.10)", pointBackgroundColor: palette.temperature, yAxisID: "primary" },
+            { ...common, label: "ฝน mm", data: items.map((i) => i.rainfall), borderColor: palette.rain, backgroundColor: "rgba(56,189,248,.35)", yAxisID: "secondary", type: "bar", borderRadius: 6 },
+            { ...common, label: "ลม km/h", data: items.map((i) => i.wind_speed_kmh), borderColor: palette.wind, backgroundColor: "rgba(15,42,67,.10)", pointBackgroundColor: palette.wind, yAxisID: "primary" },
+        ];
+    }
+
+    function renderChart(items) {
+        currentForecastItems = items;
+        if (forecastChart) forecastChart.destroy();
+        forecastChart = null;
+        if (!chartCanvas || !items.length) return;
+        forecastChart = new Chart(chartCanvas, {
+            type: "line",
+            data: { labels: items.map((i) => formatTime(i.forecast_at)), datasets: chartDataset(chartMode, items) },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                interaction: { mode: "index", intersect: false },
+                plugins: { legend: { position: "top" } },
+                scales: chartMode === "all"
+                    ? {
+                        primary: { type: "linear", position: "left", beginAtZero: false, grid: { color: "rgba(148,163,184,.14)" } },
+                        secondary: { type: "linear", position: "right", beginAtZero: true, grid: { drawOnChartArea: false } },
+                    }
+                    : { y: { beginAtZero: chartMode === "rain", grid: { color: "rgba(148,163,184,.14)" } } },
+            },
+        });
+    }
+
+    document.querySelectorAll(".chart-mode").forEach((button) => {
+        button.addEventListener("click", () => {
+            document.querySelectorAll(".chart-mode").forEach((item) => {
+                item.classList.remove("active", "btn-primary");
+                item.classList.add("btn-outline-primary");
+            });
+            button.classList.add("active", "btn-primary");
+            button.classList.remove("btn-outline-primary");
+            chartMode = button.dataset.mode;
+            renderChart(currentForecastItems);
+        });
+    });
+
+    const forecastMap = L.map("forecast-map", { zoomControl: true }).setView([15.0, 100.0], 6);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "&copy; OpenStreetMap" }).addTo(forecastMap);
+
+    function markerIcon(status) {
+        return L.divIcon({ className: "", html: `<span class="map-marker ${statusClass(status)}"></span>`, iconSize: [22, 22], iconAnchor: [11, 11], popupAnchor: [0, -10] });
+    }
+
+    function renderAllAreaMap(areas) {
+        mapMarkers.forEach((marker) => forecastMap.removeLayer(marker));
+        mapMarkers = [];
+        const bounds = [];
+        areas.forEach((area) => {
+            const latest = area.items?.[0];
+            if (!latest || latest.latitude === null || latest.latitude === undefined || latest.longitude === null || latest.longitude === undefined) return;
+            const status = area.risk_summary?.status || latest.status || "pending";
+            const marker = L.marker([latest.latitude, latest.longitude], { icon: markerIcon(status) }).addTo(forecastMap);
+            marker.bindPopup(`
+                <div class="map-popup">
+                    <strong>📍 ${escapeHtml(getAreaTitle(area))}</strong>
+                    <div class="map-popup-status ${statusClass(status)}">${escapeHtml(statusText(status))}</div>
+                    <div class="map-popup-grid">
+                        <span>🌡️ ${escapeHtml(formatNumber(latest.temperature, "°C"))}</span>
+                        <span>🌧️ ${escapeHtml(formatNumber(latest.rainfall, "mm"))}</span>
+                        <span>💧 ${escapeHtml(formatNumber(latest.relative_humidity, "%"))}</span>
+                        <span>💨 ${escapeHtml(formatNumber(latest.wind_speed_kmh, "km/h"))}</span>
+                    </div>
+                </div>
+            `);
+            mapMarkers.push(marker);
+            bounds.push([latest.latitude, latest.longitude]);
+        });
+        if (bounds.length) forecastMap.fitBounds(bounds, { padding: [30, 30], maxZoom: 9 });
+    }
+
+    function populatePublicAreaSelector(areas) {
+        if (!areaSelector || !isPublicDashboard) return;
+        areaSelector.replaceChildren();
+        areas.forEach((area) => {
+            const option = document.createElement("option");
+            option.value = area.area_id;
+            option.dataset.province = area.province || "";
+            option.dataset.district = area.district || "";
+            option.dataset.subdistrict = area.subdistrict || "";
+            option.textContent = getAreaTitle(area);
+            areaSelector.appendChild(option);
+        });
+        areaSelector.disabled = !areas.length;
+    }
+
+    async function loadAllForecasts() {
+        try {
+            dashboardUpdated.textContent = "กำลังอัปเดต...";
+            refreshDashboardButton?.classList.add("is-loading");
+            const response = await fetch("{{ url_for('main.api_forecast_all') }}", { headers: { Accept: "application/json" } });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+            allForecastAreas = payload.areas || [];
+            populatePublicAreaSelector(allForecastAreas);
+            updateSummaryStats(allForecastAreas);
+            updateAreaSummary(allForecastAreas);
+            renderAllAreaMap(allForecastAreas);
+            dashboardUpdated.textContent = `อัปเดต ${new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+            await loadSelectedForecast();
+        } catch (error) {
+            console.error(error);
+            dashboardUpdated.textContent = "อัปเดตไม่สำเร็จ";
+            forecastMessage.className = "system-message message-danger";
+            forecastMessage.textContent = `โหลดข้อมูลไม่สำเร็จ: ${error.message}`;
+        } finally {
+            refreshDashboardButton?.classList.remove("is-loading");
+        }
+    }
+
+    async function loadSelectedForecast() {
+        if (!areaSelector || !areaSelector.value) {
+            selectedAreaTitle.textContent = isPublicDashboard ? "ยังไม่มีพื้นที่สาธารณะที่มี Forecast" : "ยังไม่มีพื้นที่สำหรับพยากรณ์";
+            forecastMessage.className = "system-message message-neutral";
+            forecastMessage.textContent = "ยังไม่มี Forecast สำหรับพื้นที่นี้";
+            updateCurrentCards(null, null);
+            renderTimeline([]);
+            renderChart([]);
+            return;
+        }
+
+        const option = areaSelector.options[areaSelector.selectedIndex];
+        const province = option.dataset.province;
+        const district = option.dataset.district;
+        const subdistrict = option.dataset.subdistrict;
+        selectedAreaTitle.textContent = [province, district, subdistrict].filter(Boolean).join(" - ");
+
+        const params = new URLSearchParams({ province });
+        if (district) params.set("district", district);
+        if (subdistrict) params.set("subdistrict", subdistrict);
+
+        forecastMessage.className = "system-message message-neutral";
+        forecastMessage.textContent = "กำลังโหลด Forecast 24 ชั่วโมง...";
+        document.querySelectorAll(".current-card").forEach((card) => card.classList.add("is-loading"));
+
+        try {
+            const response = await fetch(`{{ url_for('main.api_forecast') }}?${params.toString()}`, { headers: { Accept: "application/json" } });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+            const items = Array.isArray(payload.items) ? payload.items : [];
+            if (!items.length) {
+                forecastMessage.className = "system-message message-warning";
+                forecastMessage.textContent = "ยังไม่มี Forecast สำหรับพื้นที่นี้";
+                updateCurrentCards(null, null);
+                renderTimeline([]);
+                renderChart([]);
+                return;
+            }
+            const summary = summarizeItems(items);
+            forecastMessage.className = `system-message message-${summary.status === "red" ? "danger" : summary.status === "orange" ? "warning" : "success"}`;
+            forecastMessage.innerHTML = `<strong>${escapeHtml(statusText(summary.status))}</strong> · พบ Forecast ${items.length} ช่วงเวลา · ฝนสะสม ${summary.rainTotal !== null ? summary.rainTotal.toFixed(1) + " mm" : "-"}`;
+            updateCurrentCards(items[0], summary);
+            renderTimeline(items);
+            renderChart(items);
+        } catch (error) {
+            console.error(error);
+            forecastMessage.className = "system-message message-danger";
+            forecastMessage.textContent = `โหลด Forecast ไม่สำเร็จ: ${error.message}`;
+            updateCurrentCards(null, null);
+            renderTimeline([]);
+            renderChart([]);
+        } finally {
+            document.querySelectorAll(".current-card").forEach((card) => card.classList.remove("is-loading"));
+        }
+    }
+
+    areaSelector?.addEventListener("change", loadSelectedForecast);
+
+    document.querySelectorAll(".summary-open").forEach((button) => {
+        button.addEventListener("click", () => {
+            const card = button.closest(".summary-card");
+            if (!card) return;
+            const option = Array.from(areaSelector.options).find((item) => item.value === card.dataset.areaId);
+            if (option) areaSelector.value = option.value;
+            loadSelectedForecast();
+            bootstrap.Modal.getOrCreateInstance(document.getElementById("overviewModal")).hide();
+            document.getElementById("forecast-chart")?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+    });
+
+    refreshDashboardButton?.addEventListener("click", loadAllForecasts);
+
+    function escapeHtml(value) {
+        if (value === null || value === undefined) return "";
+        return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
+    }
+
+    loadAllForecasts();
+    setInterval(loadAllForecasts, 5 * 60 * 1000);
+</script>
+{% endblock %}

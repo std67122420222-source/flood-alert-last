@@ -1,0 +1,9 @@
+Flask
+Flask-SQLAlchemy
+Flask-Login
+Flask-Bcrypt
+requests
+python-dotenv
+APScheduler
+gunicorn==23.0.0
+psycopg[binary]>=3.2,<4

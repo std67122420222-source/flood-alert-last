@@ -1,0 +1,124 @@
+{% extends "base.html" %}
+
+{% block title %}FloodAlert - ระบบแจ้งเตือนภัย{% endblock %}
+
+{% block content %}
+
+<section class="public-hero mb-4">
+    <div class="public-hero-content">
+        <div class="eyebrow">FLOOD ALERT</div>
+
+        <h1 class="public-hero-title">
+            🌧️ ติดตามสภาพอากาศและประกาศเตือนภัย
+        </h1>
+
+        <p class="public-hero-text">
+            ตรวจสอบข้อมูลพยากรณ์อากาศ ดูแผนที่ และติดตามประกาศเตือนภัย
+            ได้จากหน้าแรก โดยไม่ต้องเข้าสู่ระบบ
+        </p>
+
+        <div class="d-flex flex-wrap gap-2 mt-4">
+            <a
+                href="{{ url_for('main.dashboard') }}"
+                class="btn btn-primary btn-lg"
+            >
+                📊 ดู Dashboard
+            </a>
+
+            <a
+                href="{{ url_for('auth.login') }}"
+                class="btn btn-outline-primary btn-lg"
+            >
+                เข้าสู่ระบบ
+            </a>
+        </div>
+    </div>
+
+    <div class="public-hero-icon" aria-hidden="true">
+        🌦️
+    </div>
+</section>
+
+<section class="card p-4 mb-4">
+    <div class="section-heading mb-3">
+        <div>
+            <div class="section-kicker">PUBLIC ACCESS</div>
+            <h5 class="mb-1">ดูข้อมูลได้โดยไม่ต้อง Login</h5>
+            <p class="small text-muted mb-0">
+                การเข้าสู่ระบบจำเป็นเฉพาะเมื่อคุณต้องการบันทึกและจัดการ “พื้นที่ของฉัน”
+            </p>
+        </div>
+    </div>
+
+    <div class="row g-3">
+        <div class="col-md-4">
+            <div class="public-feature-card">
+                <div class="public-feature-icon">🌦️</div>
+                <h5>พยากรณ์อากาศ</h5>
+                <p>
+                    ดูข้อมูลสภาพอากาศและพยากรณ์จาก TMD
+                    ในพื้นที่ที่รองรับ
+                </p>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="public-feature-card">
+                <div class="public-feature-icon">🗺️</div>
+                <h5>แผนที่</h5>
+                <p>
+                    ดูตำแหน่งและสถานการณ์ของพื้นที่ต่าง ๆ
+                    ผ่านแผนที่แบบ Interactive
+                </p>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="public-feature-card">
+                <div class="public-feature-icon">⚠️</div>
+                <h5>ประกาศเตือนภัย</h5>
+                <p>
+                    ติดตามประกาศเตือนภัยจากกรมอุตุนิยมวิทยา
+                    เมื่อมีข้อมูลพร้อมใช้งาน
+                </p>
+            </div>
+        </div>
+    </div>
+</section>
+
+<section class="row g-3 mb-4">
+    <div class="col-md-6">
+        <div class="card p-4 h-100 public-callout">
+            <div class="section-kicker">PERSONAL AREAS</div>
+            <h4 class="mb-2">📍 ต้องการบันทึกพื้นที่ของคุณ?</h4>
+            <p class="text-muted mb-3">
+                สมัครสมาชิกเพื่อเพิ่มจังหวัด อำเภอ และตำบลที่ต้องการติดตาม
+                แล้วกลับมาดูข้อมูลได้ในหน้าเดียว
+            </p>
+            <a
+                href="{{ url_for('auth.register') }}"
+                class="btn btn-primary align-self-start"
+            >
+                สมัครสมาชิกฟรี
+            </a>
+        </div>
+    </div>
+
+    <div class="col-md-6">
+        <div class="card p-4 h-100 public-callout">
+            <div class="section-kicker">RETURNING USER</div>
+            <h4 class="mb-2">มีบัญชีอยู่แล้ว?</h4>
+            <p class="text-muted mb-3">
+                เปิด Dashboard สาธารณะได้ทันที หรือเข้าสู่ระบบเพื่อจัดการพื้นที่ส่วนตัว
+            </p>
+            <a
+                href="{{ url_for('auth.login') }}"
+                class="btn btn-outline-primary align-self-start"
+            >
+                เข้าสู่ระบบ
+            </a>
+        </div>
+    </div>
+</section>
+
+{% endblock %}
