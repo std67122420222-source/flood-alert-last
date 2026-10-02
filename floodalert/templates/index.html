@@ -2,6 +2,10 @@
 
 {% block title %}FloodAlert - ระบบแจ้งเตือนภัย{% endblock %}
 
+{% block head_extra %}
+<link rel="prefetch" href="{{ url_for('main.dashboard') }}">
+{% endblock %}
+
 {% block content %}
 
 <section class="public-hero mb-4">

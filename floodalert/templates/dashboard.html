@@ -2,8 +2,12 @@
 
 {% block title %}FloodAlert — Dashboard{% endblock %}
 
+{% block head_extra %}
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+{% endblock %}
+
 {% block content %}
-<div class="dashboard-shell">
+<div class="dashboard-shell" data-area-signature="{{ areas|map(attribute='id')|join(',') if current_user.is_authenticated else 'public' }}">
     <section class="dashboard-hero mb-4">
         <div class="dashboard-hero-copy">
             <div class="eyebrow">FLOOD ALERT / MONITORING CENTER</div>
@@ -362,92 +366,18 @@
             <div>
                 <div class="section-kicker">OFFICIAL WARNING</div>
                 <h5 class="mb-1">⚠️ ประกาศเตือนภัยลักษณะอากาศ</h5>
-                <p class="section-description mb-0">ข้อมูลประกาศจาก TMD / ระบบจะแยกจากระดับเฝ้าระวังที่คำนวณจาก Forecast</p>
+                <p class="section-description mb-0">ข้อมูลประกาศจาก TMD / โหลดแบบ Background หลังหน้าเว็บแสดงผล</p>
             </div>
-            <div class="d-flex align-items-center gap-2 flex-wrap">
-                <span class="source-pill">TMD</span>
-                <a href="{{ url_for('main.dashboard', warning_refresh=1) }}" class="btn btn-outline-primary btn-sm">↻ โหลดใหม่</a>
-                <a href="https://www.tmd.go.th/warning-and-events/warning-storm" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">ดูประกาศ TMD ↗</a>
-            </div>
+            <a href="https://www.tmd.go.th/warning-and-events/warning-storm" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">ดูประกาศ TMD ↗</a>
         </div>
 
-        {% set warning_items = warnings.get("items", []) %}
-        {% if warnings.get("ok", false) and warning_items %}
-            <div class="warning-toolbar mt-3">
-                <span class="warning-toolbar-label">ประกาศล่าสุด</span>
-                <span class="warning-count">{{ warning_items|length }} รายการ</span>
+        <div id="warning-content" class="mt-3">
+            <div class="warning-loading">
+                <div class="loading-shimmer warning-shimmer-title"></div>
+                <div class="loading-shimmer warning-shimmer-line"></div>
+                <div class="loading-shimmer warning-shimmer-line short"></div>
             </div>
-
-            <div class="warning-list mt-2">
-                {% for item in warning_items[:5] %}
-                <article class="warning-item">
-                    <div class="warning-item-topline">
-                        <span class="warning-badge">⚠️ {{ item.category|default('ประกาศเตือนภัย', true) }}</span>
-                        {% if item.published_at %}<span class="warning-date">{{ item.published_at }}</span>{% endif %}
-                    </div>
-                    <h6 class="warning-title">{{ item.title }}</h6>
-                    <p class="warning-summary">{{ item.headline or item.detail|truncate(260, true) }}</p>
-                    <div class="warning-meta">
-                        <span>หน่วยงาน: {{ item.agency|default('กรมอุตุนิยมวิทยา', true) }}</span>
-                        {% if item.issue_no %}<span>เลขที่: {{ item.issue_no }}</span>{% endif %}
-                    </div>
-                    <div class="warning-footer">
-                        <span class="warning-source">แหล่งข้อมูล: TMD</span>
-                        <div class="d-flex gap-2">
-                            <button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#warningDetailModal-{{ loop.index }}">อ่านรายละเอียด</button>
-                            <a href="{{ item.source_url|default('https://www.tmd.go.th/warning-and-events/warning-storm', true) }}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary btn-sm">TMD ↗</a>
-                        </div>
-                    </div>
-                </article>
-
-                <div class="modal fade" id="warningDetailModal-{{ loop.index }}" tabindex="-1" aria-hidden="true">
-                    <div class="modal-dialog modal-lg modal-dialog-scrollable">
-                        <div class="modal-content overview-modal-content">
-                            <div class="modal-header">
-                                <div>
-                                    <div class="section-kicker">TMD WARNING</div>
-                                    <h5 class="modal-title">⚠️ {{ item.title }}</h5>
-                                </div>
-                                <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
-                            </div>
-                            <div class="modal-body">
-                                <div class="warning-detail-meta">
-                                    <div>วันที่ข้อมูล: <strong>{{ item.published_at|default('-', true) }}</strong></div>
-                                    <div>หมวดหมู่: <strong>{{ item.category|default('ประกาศเตือนภัย', true) }}</strong></div>
-                                    <div>หน่วยงาน: <strong>{{ item.agency|default('กรมอุตุนิยมวิทยา', true) }}</strong></div>
-                                    {% if item.issue_no %}<div>เลขที่ประกาศ: <strong>{{ item.issue_no }}</strong></div>{% endif %}
-                                    {% if item.effect_start_at %}<div>เริ่มมีผล: <strong>{{ item.effect_start_at }}</strong></div>{% endif %}
-                                    {% if item.effect_end_at %}<div>สิ้นสุด: <strong>{{ item.effect_end_at }}</strong></div>{% endif %}
-                                    {% if item.contact %}<div>ติดต่อ: <strong>{{ item.contact }}</strong></div>{% endif %}
-                                </div>
-                                <div class="warning-detail-body mt-4">{{ item.detail }}</div>
-                                {% if item.warnings %}<div class="warning-detail-body mt-3">{{ item.warnings }}</div>{% endif %}
-                                <div class="mt-4 d-flex gap-2 flex-wrap">
-                                    <a href="{{ item.source_url|default('https://www.tmd.go.th/warning-and-events/warning-storm', true) }}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">เปิดประกาศฉบับเต็มจาก TMD</a>
-                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                {% endfor %}
-            </div>
-
-            {% if warning_items|length > 5 %}
-            <div class="text-center mt-3">
-                <a href="https://www.tmd.go.th/warning-and-events/warning-storm" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm">ดูประกาศทั้งหมดบน TMD</a>
-            </div>
-            {% endif %}
-        {% else %}
-            <div class="warning-empty mt-3">
-                <div class="warning-empty-icon">⚠️</div>
-                <div>
-                    <h6 class="mb-1">ยังไม่มีประกาศเตือนภัยที่ดึงได้</h6>
-                    <p class="mb-3 text-muted">ระบบยังไม่มีข้อมูลประกาศล่าสุดในฐานข้อมูล สามารถเปิดหน้า TMD เพื่อดูประกาศอย่างเป็นทางการได้</p>
-                    <a href="https://www.tmd.go.th/warning-and-events/warning-storm" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">เปิดประกาศเตือนภัย TMD</a>
-                </div>
-            </div>
-        {% endif %}
+        </div>
     </section>
 
     <div class="dashboard-disclaimer mt-4">
@@ -461,7 +391,10 @@
 {% endblock %}
 
 {% block scripts %}
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
 <script>
+(() => {
     const provinceInput = document.getElementById("province");
     const districtInput = document.getElementById("district");
     const subdistrictInput = document.getElementById("subdistrict");
@@ -490,12 +423,18 @@
     const overviewStatusFilter = document.getElementById("overview-status-filter");
     const overviewFilterEmpty = document.getElementById("overview-filter-empty");
     const refreshDashboardButton = document.getElementById("refresh-dashboard");
+    const warningContent = document.getElementById("warning-content");
+    const dashboardShell = document.querySelector(".dashboard-shell");
 
     const isPublicDashboard = {{ "true" if is_public_dashboard else "false" }};
+    const areaSignature = dashboardShell?.dataset.areaSignature || "public";
+    const forecastCacheKey = `floodalert:forecast:v2:${isPublicDashboard ? "public" : "auth"}:${areaSignature}`;
+    const warningCacheKey = "floodalert:warnings:v2";
+    const CACHE_TTL_MS = 60 * 1000;
 
     let forecastChart = null;
-    let currentForecastItems = [];
     let allForecastAreas = [];
+    let forecastMap = null;
     let mapMarkers = [];
     let chartMode = "all";
 
@@ -506,7 +445,6 @@
         red: { label: "ระดับรุนแรง", icon: "🔴", className: "status-red" },
         pending: { label: "รอข้อมูล", icon: "⚪", className: "status-pending" },
     };
-
     const statusRank = { pending: -1, green: 0, yellow: 1, orange: 2, red: 3 };
 
     function populateDatalist(datalist, values) {
@@ -520,46 +458,45 @@
     }
 
     async function loadDistricts() {
-        if (!provinceInput) return;
+        if (!provinceInput || !districtInput || !districtList) return;
         const province = provinceInput.value.trim();
         districtInput.value = "";
-        subdistrictInput.value = "";
-        districtInput.placeholder = "กำลังโหลดอำเภอ...";
-        subdistrictInput.placeholder = "เลือกอำเภอก่อน";
+        subdistrictInput && (subdistrictInput.value = "");
         populateDatalist(districtList, []);
         populateDatalist(subdistrictList, []);
         if (!province) {
             districtInput.placeholder = "เลือกจังหวัดก่อน";
-            locationHelp.textContent = "เลือกจังหวัดเพื่อโหลดรายการอำเภอ/เขต";
+            subdistrictInput && (subdistrictInput.placeholder = "เลือกอำเภอก่อน");
             return;
         }
+        districtInput.placeholder = "กำลังโหลดอำเภอ...";
         try {
-            const response = await fetch(`{{ url_for('main.api_districts') }}?province=${encodeURIComponent(province)}`);
+            const response = await fetch(`{{ url_for('main.api_districts') }}?province=${encodeURIComponent(province)}`, { headers: { Accept: "application/json" } });
             const payload = await response.json();
             if (!response.ok || !payload.ok) throw new Error(payload.error || "โหลดอำเภอไม่สำเร็จ");
             populateDatalist(districtList, payload.items || []);
             districtInput.placeholder = "พิมพ์หรือเลือกอำเภอ / เขต";
-            locationHelp.textContent = `พบ ${payload.items.length} อำเภอ/เขตใน ${province}`;
+            locationHelp && (locationHelp.textContent = `พบ ${payload.items.length} อำเภอ/เขตใน ${province}`);
         } catch (error) {
             districtInput.placeholder = "พิมพ์อำเภอเองได้";
-            locationHelp.textContent = `โหลดรายการอำเภอไม่สำเร็จ: ${error.message}`;
+            locationHelp && (locationHelp.textContent = "โหลดรายการอำเภอไม่สำเร็จ สามารถพิมพ์เองได้");
         }
     }
 
     async function loadSubdistricts() {
-        if (!provinceInput || !districtInput) return;
+        if (!provinceInput || !districtInput || !subdistrictInput || !subdistrictList) return;
         const province = provinceInput.value.trim();
         const district = districtInput.value.trim();
         subdistrictInput.value = "";
-        subdistrictInput.placeholder = "กำลังโหลดตำบล...";
         populateDatalist(subdistrictList, []);
         if (!province || !district) {
             subdistrictInput.placeholder = "เลือกอำเภอก่อน";
             return;
         }
+        subdistrictInput.placeholder = "กำลังโหลดตำบล...";
         try {
             const params = new URLSearchParams({ province, district });
-            const response = await fetch(`{{ url_for('main.api_subdistricts') }}?${params.toString()}`);
+            const response = await fetch(`{{ url_for('main.api_subdistricts') }}?${params.toString()}`, { headers: { Accept: "application/json" } });
             const payload = await response.json();
             if (!response.ok || !payload.ok) throw new Error(payload.error || "โหลดตำบลไม่สำเร็จ");
             populateDatalist(subdistrictList, payload.items || []);
@@ -627,204 +564,156 @@
     function applyRiskBanner(status, summary) {
         const banner = document.getElementById("overall-risk-banner");
         const meta = statusMeta[status] || statusMeta.pending;
+        if (!banner) return;
         banner.className = `risk-banner risk-${status} mb-4`;
         document.getElementById("overall-risk-icon").textContent = meta.icon;
         document.getElementById("overall-risk").textContent = meta.label;
         document.getElementById("overall-risk-note").textContent = status === "pending"
-            ? "ยังไม่มีข้อมูล Forecast เพียงพอสำหรับการประเมิน"
-            : "เป็นตัวชี้วัดจาก Forecast ของระบบ ไม่ใช่ประกาศเตือนภัยอย่างเป็นทางการ";
+            ? "ยังไม่มีข้อมูล Forecast ที่พร้อมประเมิน"
+            : "ระดับนี้เป็นตัวชี้วัดจาก Forecast ของระบบ ไม่ใช่ประกาศเตือนภัยอย่างเป็นทางการ";
         document.getElementById("overall-items").textContent = summary.count ? `${summary.count} ช่วง` : "-";
         document.getElementById("overall-max-rain").textContent = summary.maxRain !== null ? `${summary.maxRain.toFixed(1)} mm` : "-";
         document.getElementById("overall-max-wind").textContent = summary.maxWind !== null ? `${summary.maxWind.toFixed(1)} km/h` : "-";
     }
 
     function updateSummaryStats(areas) {
-        const counts = { total: areas.length, green: 0, yellow: 0, orange: 0, red: 0, pending: 0 };
-        let highest = "pending";
-
+        const counts = { green: 0, yellow: 0, orange: 0, red: 0, pending: 0 };
+        let allItems = [];
         areas.forEach((area) => {
-            const summary = area.risk_summary || summarizeItems(area.items || []);
-            const status = summary.status || "pending";
-            if (counts[status] !== undefined) counts[status] += 1; else counts.pending += 1;
-            if ((statusRank[status] ?? -1) > (statusRank[highest] ?? -1)) {
-                highest = status;
-            }
+            const status = area.risk_summary?.status || "pending";
+            counts[status] = (counts[status] || 0) + 1;
+            allItems = allItems.concat(area.items || []);
         });
-
-        document.getElementById("stat-total").textContent = counts.total;
+        document.getElementById("stat-total").textContent = areas.length;
         document.getElementById("stat-green").textContent = counts.green;
         document.getElementById("stat-yellow").textContent = counts.yellow;
         document.getElementById("stat-orange").textContent = counts.orange;
         document.getElementById("stat-red").textContent = counts.red;
         document.getElementById("stat-pending").textContent = counts.pending;
 
-        const allItems = areas.flatMap((area) => area.items || []);
-        const overallSummary = summarizeItems(allItems);
-        applyRiskBanner(highest, overallSummary);
-
-        ["overview-total", "overview-green", "overview-yellow", "overview-orange", "overview-red", "overview-pending"].forEach((id) => {
-            const el = document.getElementById(id);
-            if (el) el.textContent = counts[id.replace("overview-", "")];
+        let highest = "pending";
+        areas.forEach((area) => {
+            const status = area.risk_summary?.status || "pending";
+            if ((statusRank[status] ?? -1) > (statusRank[highest] ?? -1)) highest = status;
         });
+        applyRiskBanner(highest, summarizeItems(allItems));
     }
 
     function updateAreaSummary(areas) {
-        areas.forEach((area) => {
-            const card = document.querySelector(`.summary-card[data-area-id="${CSS.escape(String(area.area_id))}"]`);
-            if (!card) return;
+        document.querySelectorAll(".summary-card").forEach((card) => {
+            const area = areas.find((item) => String(item.area_id) === String(card.dataset.areaId));
+            if (!area) return;
             const latest = area.items?.[0];
             const status = area.risk_summary?.status || latest?.status || "pending";
             card.dataset.status = status;
-            const badge = card.querySelector(".summary-status");
-            badge.textContent = statusText(status);
-            badge.className = `summary-status compact-status ${statusClass(status)}`;
-            card.querySelector(".summary-temperature").textContent = latest ? formatNumber(latest.temperature, "°C") : "-";
-            card.querySelector(".summary-rain").textContent = latest ? formatNumber(latest.rainfall, "mm") : "-";
-            card.querySelector(".summary-humidity").textContent = latest ? formatNumber(latest.relative_humidity, "%") : "-";
-            card.querySelector(".summary-wind").textContent = latest ? formatNumber(latest.wind_speed_kmh, "km/h") : "-";
+            const statusElement = card.querySelector(".summary-status");
+            if (statusElement) {
+                statusElement.className = `summary-status ${statusClass(status)} compact-status`;
+                statusElement.textContent = statusText(status);
+            }
+            card.querySelector(".summary-temperature")?.replaceChildren(document.createTextNode(formatNumber(latest?.temperature, "°C")));
+            card.querySelector(".summary-rain")?.replaceChildren(document.createTextNode(formatNumber(latest?.rainfall, "mm")));
+            card.querySelector(".summary-humidity")?.replaceChildren(document.createTextNode(formatNumber(latest?.relative_humidity, "%")));
+            card.querySelector(".summary-wind")?.replaceChildren(document.createTextNode(formatNumber(latest?.wind_speed_kmh, "km/h")));
         });
         applyOverviewFilters();
     }
 
-    function applyOverviewFilters() {
-        if (!overviewSearch || !overviewStatusFilter || !overviewFilterEmpty) return;
-        const query = overviewSearch.value.trim().toLowerCase();
-        const selectedStatus = overviewStatusFilter.value;
-        const rows = document.querySelectorAll(".overview-row.summary-card");
-        let visibleCount = 0;
-        rows.forEach((row) => {
-            const haystack = (row.dataset.search || "").toLowerCase();
-            const matchesSearch = !query || haystack.includes(query);
-            const matchesStatus = selectedStatus === "all" || (row.dataset.status || "pending") === selectedStatus;
-            const visible = matchesSearch && matchesStatus;
-            row.classList.toggle("d-none", !visible);
-            if (visible) visibleCount += 1;
-        });
-        overviewFilterEmpty.classList.toggle("d-none", visibleCount > 0 || rows.length === 0);
-    }
-
-    overviewSearch?.addEventListener("input", applyOverviewFilters);
-    overviewStatusFilter?.addEventListener("change", applyOverviewFilters);
-
-    function updateCurrentCards(item, summary) {
-        if (!item) {
-            temperatureElement.textContent = "-";
-            rainfallElement.textContent = "-";
-            humidityElement.textContent = "-";
-            windElement.textContent = "-";
-            pressureElement.textContent = "-";
-            conditionElement.textContent = "-";
-            statusElement.textContent = statusText("pending");
-            selectedRainTotal.textContent = "-";
-            selectedForecastUpdated.textContent = "ไม่มีข้อมูล Forecast";
-            return;
-        }
-        temperatureElement.textContent = formatNumber(item.temperature, "°C");
-        rainfallElement.textContent = formatNumber(item.rainfall, "mm");
-        humidityElement.textContent = formatNumber(item.relative_humidity, "%");
-        windElement.textContent = formatNumber(item.wind_speed_kmh, "km/h");
-        pressureElement.textContent = formatNumber(item.pressure, "hPa");
-        conditionElement.textContent = item.condition || "-";
-        statusElement.textContent = statusText(item.status);
-        selectedRainTotal.textContent = summary?.rainTotal !== null && summary?.rainTotal !== undefined ? `${summary.rainTotal.toFixed(1)} mm` : "-";
-        selectedForecastUpdated.textContent = `Forecast ล่าสุด: ${formatDateTime(item.forecast_at)}`;
+    function updateCurrentCards(latest, summary) {
+        temperatureElement && (temperatureElement.textContent = formatNumber(latest?.temperature, "°C"));
+        rainfallElement && (rainfallElement.textContent = formatNumber(latest?.rainfall, "mm"));
+        humidityElement && (humidityElement.textContent = formatNumber(latest?.relative_humidity, "%"));
+        windElement && (windElement.textContent = formatNumber(latest?.wind_speed_kmh, "km/h"));
+        pressureElement && (pressureElement.textContent = formatNumber(latest?.pressure, "hPa"));
+        conditionElement && (conditionElement.textContent = latest?.condition || "-");
+        statusElement && (statusElement.textContent = latest ? statusText(latest.status) : "⚪ รอข้อมูล");
+        selectedRainTotal && (selectedRainTotal.textContent = summary?.rainTotal !== null && summary?.rainTotal !== undefined ? `${summary.rainTotal.toFixed(1)} mm` : "-");
+        selectedForecastUpdated && (selectedForecastUpdated.textContent = latest?.forecast_at ? `ข้อมูลเวลา ${formatDateTime(latest.forecast_at)}` : "-");
     }
 
     function renderTimeline(items) {
         if (!forecastTimeline) return;
         forecastTimeline.replaceChildren();
         items.slice(0, 8).forEach((item) => {
-            const status = statusMeta[item.status] || statusMeta.pending;
-            const card = document.createElement("div");
-            card.className = "timeline-card";
-            card.innerHTML = `
-                <div class="timeline-time">${escapeHtml(formatTime(item.forecast_at))}</div>
-                <div class="timeline-icon">${status.icon}</div>
-                <div class="timeline-temp">${escapeHtml(formatNumber(item.temperature, "°C"))}</div>
-                <div class="timeline-rain">${escapeHtml(formatNumber(item.rainfall, "mm"))}</div>
-            `;
-            forecastTimeline.appendChild(card);
+            const el = document.createElement("div");
+            el.className = `timeline-card ${statusClass(item.status)}`;
+            el.innerHTML = `<div class="timeline-time">${escapeHtml(formatTime(item.forecast_at))}</div><div class="timeline-icon">${escapeHtml(statusMeta[item.status]?.icon || "⚪")}</div><div class="timeline-temp">${escapeHtml(formatNumber(item.temperature, "°C"))}</div><div class="timeline-rain">${escapeHtml(formatNumber(item.rainfall, "mm"))}</div>`;
+            forecastTimeline.appendChild(el);
         });
     }
 
-    function chartDataset(mode, items) {
-        const common = { tension: 0.25, pointRadius: 2, pointHoverRadius: 5, borderWidth: 2.5 };
-        const palette = { temperature: "#147D92", rain: "#38BDF8", wind: "#0F2A43", humidity: "#7C3AED" };
-        if (mode === "temperature") return [{ ...common, label: "อุณหภูมิ °C", data: items.map((i) => i.temperature), borderColor: palette.temperature, backgroundColor: "rgba(20,125,146,.10)", pointBackgroundColor: palette.temperature }];
-        if (mode === "rain") return [{ ...common, label: "ฝน mm", data: items.map((i) => i.rainfall), borderColor: palette.rain, backgroundColor: "rgba(56,189,248,.35)", type: "bar", borderRadius: 6 }];
-        if (mode === "wind") return [{ ...common, label: "ลม km/h", data: items.map((i) => i.wind_speed_kmh), borderColor: palette.wind, backgroundColor: "rgba(15,42,67,.10)", pointBackgroundColor: palette.wind }];
-        if (mode === "humidity") return [{ ...common, label: "ความชื้น %", data: items.map((i) => i.relative_humidity), borderColor: palette.humidity, backgroundColor: "rgba(124,58,237,.10)", pointBackgroundColor: palette.humidity }];
-        return [
-            { ...common, label: "อุณหภูมิ °C", data: items.map((i) => i.temperature), borderColor: palette.temperature, backgroundColor: "rgba(20,125,146,.10)", pointBackgroundColor: palette.temperature, yAxisID: "primary" },
-            { ...common, label: "ฝน mm", data: items.map((i) => i.rainfall), borderColor: palette.rain, backgroundColor: "rgba(56,189,248,.35)", yAxisID: "secondary", type: "bar", borderRadius: 6 },
-            { ...common, label: "ลม km/h", data: items.map((i) => i.wind_speed_kmh), borderColor: palette.wind, backgroundColor: "rgba(15,42,67,.10)", pointBackgroundColor: palette.wind, yAxisID: "primary" },
-        ];
-    }
-
     function renderChart(items) {
-        currentForecastItems = items;
-        if (forecastChart) forecastChart.destroy();
-        forecastChart = null;
-        if (!chartCanvas || !items.length) return;
+        if (!chartCanvas || typeof Chart === "undefined") return;
+        const labels = items.map((item) => formatTime(item.forecast_at));
+        const configs = {
+            all: [
+                { label: "อุณหภูมิ °C", data: items.map((item) => item.temperature), axis: "y" },
+                { label: "ฝน mm", data: items.map((item) => item.rainfall), axis: "y1" },
+            ],
+            temperature: [{ label: "อุณหภูมิ °C", data: items.map((item) => item.temperature), axis: "y" }],
+            rain: [{ label: "ฝน mm", data: items.map((item) => item.rainfall), axis: "y" }],
+            wind: [{ label: "ลม km/h", data: items.map((item) => item.wind_speed_kmh), axis: "y" }],
+            humidity: [{ label: "ความชื้น %", data: items.map((item) => item.relative_humidity), axis: "y" }],
+        };
+        const datasets = (configs[chartMode] || configs.all).map((config) => ({
+            label: config.label,
+            data: config.data,
+            borderWidth: 2,
+            pointRadius: 2,
+            tension: 0.3,
+            fill: false,
+            yAxisID: config.axis,
+        }));
+        forecastChart?.destroy();
         forecastChart = new Chart(chartCanvas, {
             type: "line",
-            data: { labels: items.map((i) => formatTime(i.forecast_at)), datasets: chartDataset(chartMode, items) },
+            data: { labels, datasets },
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
                 interaction: { mode: "index", intersect: false },
-                plugins: { legend: { position: "top" } },
-                scales: chartMode === "all"
-                    ? {
-                        primary: { type: "linear", position: "left", beginAtZero: false, grid: { color: "rgba(148,163,184,.14)" } },
-                        secondary: { type: "linear", position: "right", beginAtZero: true, grid: { drawOnChartArea: false } },
-                    }
-                    : { y: { beginAtZero: chartMode === "rain", grid: { color: "rgba(148,163,184,.14)" } } },
+                plugins: { legend: { display: true } },
+                scales: {
+                    y: { beginAtZero: false },
+                    y1: { beginAtZero: true, position: "right", grid: { drawOnChartArea: false } },
+                },
             },
         });
     }
 
-    document.querySelectorAll(".chart-mode").forEach((button) => {
-        button.addEventListener("click", () => {
-            document.querySelectorAll(".chart-mode").forEach((item) => {
-                item.classList.remove("active", "btn-primary");
-                item.classList.add("btn-outline-primary");
-            });
-            button.classList.add("active", "btn-primary");
-            button.classList.remove("btn-outline-primary");
-            chartMode = button.dataset.mode;
-            renderChart(currentForecastItems);
-        });
-    });
-
-    const forecastMap = L.map("forecast-map", { zoomControl: true }).setView([15.0, 100.0], 6);
-    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", { maxZoom: 18, attribution: "&copy; OpenStreetMap" }).addTo(forecastMap);
-
     function markerIcon(status) {
-        return L.divIcon({ className: "", html: `<span class="map-marker ${statusClass(status)}"></span>`, iconSize: [22, 22], iconAnchor: [11, 11], popupAnchor: [0, -10] });
+        const colors = { green: "#16A34A", yellow: "#EAB308", orange: "#F97316", red: "#DC2626", pending: "#94A3B8" };
+        const color = colors[status] || colors.pending;
+        return L.divIcon({
+            className: "flood-marker",
+            html: `<span style="display:block;width:18px;height:18px;border-radius:50%;background:${color};border:3px solid white;box-shadow:0 2px 8px rgba(15,42,67,.25)"></span>`,
+            iconSize: [18, 18],
+            iconAnchor: [9, 9],
+        });
+    }
+
+    function initMap() {
+        const element = document.getElementById("forecast-map");
+        if (!element || typeof L === "undefined" || forecastMap) return;
+        forecastMap = L.map(element).setView([15.0, 100.0], 6);
+        L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+            maxZoom: 18,
+            attribution: "&copy; OpenStreetMap",
+        }).addTo(forecastMap);
     }
 
     function renderAllAreaMap(areas) {
-        mapMarkers.forEach((marker) => forecastMap.removeLayer(marker));
+        initMap();
+        if (!forecastMap) return;
+        mapMarkers.forEach((marker) => marker.remove());
         mapMarkers = [];
         const bounds = [];
         areas.forEach((area) => {
             const latest = area.items?.[0];
-            if (!latest || latest.latitude === null || latest.latitude === undefined || latest.longitude === null || latest.longitude === undefined) return;
+            if (!latest || latest.latitude == null || latest.longitude == null) return;
             const status = area.risk_summary?.status || latest.status || "pending";
             const marker = L.marker([latest.latitude, latest.longitude], { icon: markerIcon(status) }).addTo(forecastMap);
-            marker.bindPopup(`
-                <div class="map-popup">
-                    <strong>📍 ${escapeHtml(getAreaTitle(area))}</strong>
-                    <div class="map-popup-status ${statusClass(status)}">${escapeHtml(statusText(status))}</div>
-                    <div class="map-popup-grid">
-                        <span>🌡️ ${escapeHtml(formatNumber(latest.temperature, "°C"))}</span>
-                        <span>🌧️ ${escapeHtml(formatNumber(latest.rainfall, "mm"))}</span>
-                        <span>💧 ${escapeHtml(formatNumber(latest.relative_humidity, "%"))}</span>
-                        <span>💨 ${escapeHtml(formatNumber(latest.wind_speed_kmh, "km/h"))}</span>
-                    </div>
-                </div>
-            `);
+            marker.bindPopup(`<div class="map-popup"><strong>📍 ${escapeHtml(getAreaTitle(area))}</strong><div class="map-popup-status ${statusClass(status)}">${escapeHtml(statusText(status))}</div><div class="map-popup-grid"><span>🌡️ ${escapeHtml(formatNumber(latest.temperature, "°C"))}</span><span>🌧️ ${escapeHtml(formatNumber(latest.rainfall, "mm"))}</span><span>💧 ${escapeHtml(formatNumber(latest.relative_humidity, "%"))}</span><span>💨 ${escapeHtml(formatNumber(latest.wind_speed_kmh, "km/h"))}</span></div></div>`);
             mapMarkers.push(marker);
             bounds.push([latest.latitude, latest.longitude]);
         });
@@ -846,108 +735,173 @@
         areaSelector.disabled = !areas.length;
     }
 
-    async function loadAllForecasts() {
-        try {
-            dashboardUpdated.textContent = "กำลังอัปเดต...";
-            refreshDashboardButton?.classList.add("is-loading");
-            const response = await fetch("{{ url_for('main.api_forecast_all') }}", { headers: { Accept: "application/json" } });
-            const payload = await response.json();
-            if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-            allForecastAreas = payload.areas || [];
-            populatePublicAreaSelector(allForecastAreas);
-            updateSummaryStats(allForecastAreas);
-            updateAreaSummary(allForecastAreas);
-            renderAllAreaMap(allForecastAreas);
-            dashboardUpdated.textContent = `อัปเดต ${new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
-            await loadSelectedForecast();
-        } catch (error) {
-            console.error(error);
-            dashboardUpdated.textContent = "อัปเดตไม่สำเร็จ";
-            forecastMessage.className = "system-message message-danger";
-            forecastMessage.textContent = `โหลดข้อมูลไม่สำเร็จ: ${error.message}`;
-        } finally {
-            refreshDashboardButton?.classList.remove("is-loading");
-        }
-    }
-
-    async function loadSelectedForecast() {
-        if (!areaSelector || !areaSelector.value) {
-            selectedAreaTitle.textContent = isPublicDashboard ? "ยังไม่มีพื้นที่สาธารณะที่มี Forecast" : "ยังไม่มีพื้นที่สำหรับพยากรณ์";
-            forecastMessage.className = "system-message message-neutral";
-            forecastMessage.textContent = "ยังไม่มี Forecast สำหรับพื้นที่นี้";
+    function renderSelectedArea(area) {
+        if (!area || !area.items?.length) {
+            selectedAreaTitle && (selectedAreaTitle.textContent = isPublicDashboard ? "ยังไม่มีพื้นที่สาธารณะที่มี Forecast" : "ยังไม่มีพื้นที่สำหรับพยากรณ์");
+            forecastMessage && (forecastMessage.className = "system-message message-neutral", forecastMessage.textContent = "ยังไม่มี Forecast สำหรับพื้นที่นี้");
             updateCurrentCards(null, null);
             renderTimeline([]);
             renderChart([]);
             return;
         }
+        selectedAreaTitle.textContent = getAreaTitle(area);
+        const items = area.items || [];
+        const summary = summarizeItems(items);
+        forecastMessage.className = `system-message message-${summary.status === "red" ? "danger" : summary.status === "orange" ? "warning" : "success"}`;
+        forecastMessage.innerHTML = `<strong>${escapeHtml(statusText(summary.status))}</strong> · พบ Forecast ${items.length} ช่วงเวลา · ฝนสะสม ${summary.rainTotal !== null ? summary.rainTotal.toFixed(1) + " mm" : "-"}`;
+        updateCurrentCards(items[0], summary);
+        renderTimeline(items);
+        renderChart(items);
+    }
 
-        const option = areaSelector.options[areaSelector.selectedIndex];
-        const province = option.dataset.province;
-        const district = option.dataset.district;
-        const subdistrict = option.dataset.subdistrict;
-        selectedAreaTitle.textContent = [province, district, subdistrict].filter(Boolean).join(" - ");
+    function applyForecastPayload(payload) {
+        allForecastAreas = payload.areas || [];
+        populatePublicAreaSelector(allForecastAreas);
+        updateSummaryStats(allForecastAreas);
+        updateAreaSummary(allForecastAreas);
+        renderAllAreaMap(allForecastAreas);
 
-        const params = new URLSearchParams({ province });
-        if (district) params.set("district", district);
-        if (subdistrict) params.set("subdistrict", subdistrict);
+        let selectedId = areaSelector?.value;
+        if (!selectedId && allForecastAreas.length) {
+            selectedId = String(allForecastAreas[0].area_id);
+            if (areaSelector) areaSelector.value = selectedId;
+        }
+        const selected = allForecastAreas.find((area) => String(area.area_id) === String(selectedId));
+        renderSelectedArea(selected);
+    }
 
-        forecastMessage.className = "system-message message-neutral";
-        forecastMessage.textContent = "กำลังโหลด Forecast 24 ชั่วโมง...";
-        document.querySelectorAll(".current-card").forEach((card) => card.classList.add("is-loading"));
-
+    function readCache(key) {
         try {
-            const response = await fetch(`{{ url_for('main.api_forecast') }}?${params.toString()}`, { headers: { Accept: "application/json" } });
-            const payload = await response.json();
-            if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP ${response.status}`);
-            const items = Array.isArray(payload.items) ? payload.items : [];
-            if (!items.length) {
-                forecastMessage.className = "system-message message-warning";
-                forecastMessage.textContent = "ยังไม่มี Forecast สำหรับพื้นที่นี้";
-                updateCurrentCards(null, null);
-                renderTimeline([]);
-                renderChart([]);
-                return;
-            }
-            const summary = summarizeItems(items);
-            forecastMessage.className = `system-message message-${summary.status === "red" ? "danger" : summary.status === "orange" ? "warning" : "success"}`;
-            forecastMessage.innerHTML = `<strong>${escapeHtml(statusText(summary.status))}</strong> · พบ Forecast ${items.length} ช่วงเวลา · ฝนสะสม ${summary.rainTotal !== null ? summary.rainTotal.toFixed(1) + " mm" : "-"}`;
-            updateCurrentCards(items[0], summary);
-            renderTimeline(items);
-            renderChart(items);
-        } catch (error) {
-            console.error(error);
-            forecastMessage.className = "system-message message-danger";
-            forecastMessage.textContent = `โหลด Forecast ไม่สำเร็จ: ${error.message}`;
-            updateCurrentCards(null, null);
-            renderTimeline([]);
-            renderChart([]);
-        } finally {
-            document.querySelectorAll(".current-card").forEach((card) => card.classList.remove("is-loading"));
+            const parsed = JSON.parse(sessionStorage.getItem(key) || "null");
+            if (!parsed || !parsed.savedAt || Date.now() - parsed.savedAt > CACHE_TTL_MS) return null;
+            return parsed.data;
+        } catch (_) {
+            return null;
         }
     }
 
-    areaSelector?.addEventListener("change", loadSelectedForecast);
+    function writeCache(key, data) {
+        try {
+            sessionStorage.setItem(key, JSON.stringify({ savedAt: Date.now(), data }));
+        } catch (_) {}
+    }
+
+    async function fetchForecastData({ background = false } = {}) {
+        try {
+            if (!background) dashboardUpdated.textContent = "กำลังอัปเดต...";
+            refreshDashboardButton?.classList.add("is-loading");
+            const response = await fetch("{{ url_for('main.api_forecast_all') }}", { headers: { Accept: "application/json" }, cache: "no-store" });
+            const payload = await response.json();
+            if (!response.ok || !payload.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+            writeCache(forecastCacheKey, payload);
+            applyForecastPayload(payload);
+            dashboardUpdated.textContent = `อัปเดต ${new Date().toLocaleTimeString("th-TH", { hour: "2-digit", minute: "2-digit", second: "2-digit" })}`;
+        } catch (error) {
+            console.error(error);
+            if (!background && dashboardUpdated) dashboardUpdated.textContent = "อัปเดตไม่สำเร็จ";
+            if (!allForecastAreas.length && forecastMessage) {
+                forecastMessage.className = "system-message message-danger";
+                forecastMessage.textContent = `โหลดข้อมูลไม่สำเร็จ: ${error.message}`;
+            }
+        } finally {
+            refreshDashboardButton?.classList.remove("is-loading");
+        }
+    }
+
+    async function loadAllForecasts() {
+        const cached = readCache(forecastCacheKey);
+        if (cached) {
+            applyForecastPayload(cached);
+            dashboardUpdated.textContent = "แสดงข้อมูลล่าสุด · กำลังตรวจสอบข้อมูลใหม่...";
+            void fetchForecastData({ background: true });
+            return;
+        }
+        await fetchForecastData();
+    }
+
+    async function loadWarnings() {
+        const cached = readCache(warningCacheKey);
+        if (cached) renderWarnings(cached);
+        try {
+            const response = await fetch("{{ url_for('main.api_warnings') }}", { headers: { Accept: "application/json" }, cache: "no-store" });
+            const payload = await response.json();
+            if (!response.ok) throw new Error(payload.error || `HTTP ${response.status}`);
+            writeCache(warningCacheKey, payload);
+            renderWarnings(payload);
+        } catch (error) {
+            if (!cached) renderWarnings({ ok: false, error: "ไม่สามารถโหลดประกาศเตือนภัยได้ในขณะนี้" });
+        }
+    }
+
+    function renderWarnings(payload) {
+        if (!warningContent) return;
+        const items = Array.isArray(payload?.items) ? payload.items.slice(0, 5) : [];
+        if (!payload?.ok || !items.length) {
+            warningContent.innerHTML = `<div class="warning-empty"><div class="warning-empty-icon">⚠️</div><div><h6 class="mb-1">ยังไม่มีประกาศเตือนภัยที่ดึงได้</h6><p class="mb-3 text-muted">ระบบจะแสดงประกาศล่าสุดจาก TMD เมื่อข้อมูลพร้อมใช้งาน</p><a href="https://www.tmd.go.th/warning-and-events/warning-storm" target="_blank" rel="noopener noreferrer" class="btn btn-primary btn-sm">เปิดประกาศเตือนภัย TMD</a></div></div>`;
+            return;
+        }
+        warningContent.innerHTML = `<div class="warning-toolbar"><span class="warning-toolbar-label">ประกาศล่าสุด</span><span class="warning-count">${items.length} รายการ</span></div><div class="warning-list mt-2">${items.map((item, index) => {
+            const modalId = `warningDetailModal-${index}`;
+            return `<article class="warning-item"><div class="warning-item-topline"><span class="warning-badge">⚠️ ${escapeHtml(item.category || "ประกาศเตือนภัย")}</span><span class="warning-date">${escapeHtml(item.published_at || "")}</span></div><h6 class="warning-title">${escapeHtml(item.title || "ประกาศเตือนภัย")}</h6><p class="warning-summary">${escapeHtml(item.headline || item.detail || "")}</p><div class="warning-meta"><span>หน่วยงาน: ${escapeHtml(item.agency || "กรมอุตุนิยมวิทยา")}</span>${item.issue_no ? `<span>เลขที่: ${escapeHtml(item.issue_no)}</span>` : ""}</div><div class="warning-footer"><span class="warning-source">แหล่งข้อมูล: TMD</span><div class="d-flex gap-2"><button type="button" class="btn btn-outline-primary btn-sm" data-bs-toggle="modal" data-bs-target="#${modalId}">อ่านรายละเอียด</button><a href="${escapeHtml(item.source_url || "https://www.tmd.go.th/warning-and-events/warning-storm")}" target="_blank" rel="noopener noreferrer" class="btn btn-outline-secondary btn-sm">TMD ↗</a></div></div></article><div class="modal fade" id="${modalId}" tabindex="-1" aria-hidden="true"><div class="modal-dialog modal-lg modal-dialog-scrollable"><div class="modal-content overview-modal-content"><div class="modal-header"><div><div class="section-kicker">TMD WARNING</div><h5 class="modal-title">⚠️ ${escapeHtml(item.title || "ประกาศเตือนภัย")}</h5></div><button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button></div><div class="modal-body"><div class="warning-detail-meta"><div>วันที่ข้อมูล: <strong>${escapeHtml(item.published_at || "-")}</strong></div><div>หมวดหมู่: <strong>${escapeHtml(item.category || "ประกาศเตือนภัย")}</strong></div><div>หน่วยงาน: <strong>${escapeHtml(item.agency || "กรมอุตุนิยมวิทยา")}</strong></div>${item.issue_no ? `<div>เลขที่ประกาศ: <strong>${escapeHtml(item.issue_no)}</strong></div>` : ""}</div><div class="warning-detail-body mt-4">${escapeHtml(item.detail || "-")}</div>${item.warnings ? `<div class="warning-detail-body mt-3">${escapeHtml(item.warnings)}</div>` : ""}<div class="mt-4 d-flex gap-2 flex-wrap"><a href="${escapeHtml(item.source_url || "https://www.tmd.go.th/warning-and-events/warning-storm")}" target="_blank" rel="noopener noreferrer" class="btn btn-primary">เปิดประกาศฉบับเต็มจาก TMD</a><button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ปิด</button></div></div></div></div></div>`;
+        }).join("")}</div>${payload.items?.length > 5 ? `<div class="text-center mt-3"><a href="https://www.tmd.go.th/warning-and-events/warning-storm" target="_blank" rel="noopener noreferrer" class="btn btn-outline-primary btn-sm">ดูประกาศทั้งหมดบน TMD</a></div>` : ""}`;
+    }
+
+    function applyOverviewFilters() {
+        const query = (overviewSearch?.value || "").trim().toLowerCase();
+        const status = overviewStatusFilter?.value || "all";
+        const cards = [...document.querySelectorAll(".summary-card")];
+        let visible = 0;
+        cards.forEach((card) => {
+            const matchesQuery = !query || (card.dataset.search || "").toLowerCase().includes(query);
+            const matchesStatus = status === "all" || card.dataset.status === status;
+            const show = matchesQuery && matchesStatus;
+            card.classList.toggle("d-none", !show);
+            if (show) visible += 1;
+        });
+        overviewFilterEmpty?.classList.toggle("d-none", visible !== 0 || cards.length === 0);
+    }
+    overviewSearch?.addEventListener("input", applyOverviewFilters);
+    overviewStatusFilter?.addEventListener("change", applyOverviewFilters);
+
+    areaSelector?.addEventListener("change", () => {
+        const selected = allForecastAreas.find((area) => String(area.area_id) === String(areaSelector.value));
+        renderSelectedArea(selected);
+    });
 
     document.querySelectorAll(".summary-open").forEach((button) => {
         button.addEventListener("click", () => {
             const card = button.closest(".summary-card");
-            if (!card) return;
-            const option = Array.from(areaSelector.options).find((item) => item.value === card.dataset.areaId);
-            if (option) areaSelector.value = option.value;
-            loadSelectedForecast();
+            if (!card || !areaSelector) return;
+            areaSelector.value = card.dataset.areaId;
+            renderSelectedArea(allForecastAreas.find((area) => String(area.area_id) === String(card.dataset.areaId)));
             bootstrap.Modal.getOrCreateInstance(document.getElementById("overviewModal")).hide();
             document.getElementById("forecast-chart")?.scrollIntoView({ behavior: "smooth", block: "center" });
         });
     });
 
-    refreshDashboardButton?.addEventListener("click", loadAllForecasts);
+    document.querySelectorAll(".chart-mode").forEach((button) => {
+        button.addEventListener("click", () => {
+            chartMode = button.dataset.mode || "all";
+            document.querySelectorAll(".chart-mode").forEach((item) => item.classList.toggle("active", item === button));
+            document.querySelectorAll(".chart-mode").forEach((item) => {
+                item.classList.toggle("btn-primary", item === button);
+                item.classList.toggle("btn-outline-primary", item !== button);
+            });
+            const selected = allForecastAreas.find((area) => String(area.area_id) === String(areaSelector?.value));
+            renderChart(selected?.items || []);
+        });
+    });
+
+    refreshDashboardButton?.addEventListener("click", () => fetchForecastData());
 
     function escapeHtml(value) {
         if (value === null || value === undefined) return "";
         return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
     }
 
-    loadAllForecasts();
-    setInterval(loadAllForecasts, 5 * 60 * 1000);
+    // Non-blocking startup: Forecast and Warning load in parallel.
+    Promise.allSettled([loadAllForecasts(), loadWarnings()]);
+    setInterval(() => fetchForecastData({ background: true }), 5 * 60 * 1000);
+})();
 </script>
 {% endblock %}

@@ -1,4 +1,5 @@
 import os
+from datetime import datetime, timedelta
 from flask import (
     Blueprint,
     flash,
@@ -9,7 +10,6 @@ from flask import (
     url_for,
 )
 from flask_login import current_user, login_required
-
 from . import db
 from .locations import (
     LocationCatalogError,
@@ -121,42 +121,37 @@ def index():
 
 
 def get_public_forecast_areas(limit=100):
-    """Return distinct forecast locations available for public viewing."""
+    """Return distinct cached forecast locations without loading whole rows."""
     rows = (
-        ForecastData.query
+        db.session.query(
+            ForecastData.province,
+            ForecastData.district,
+            ForecastData.subdistrict,
+        )
+        .distinct()
         .order_by(
             ForecastData.province,
             ForecastData.district,
             ForecastData.subdistrict,
-            ForecastData.forecast_at.desc(),
         )
+        .limit(limit)
         .all()
     )
 
-    seen = set()
-    locations = []
-
-    for row in rows:
-        key = (
-            row.province,
-            row.district or "",
-            row.subdistrict or "",
-        )
-
-        if key in seen:
-            continue
-
-        seen.add(key)
-        locations.append(key)
-
-        if len(locations) >= limit:
-            break
-
-    return locations
+    return [
+        (province, district or "", subdistrict or "")
+        for province, district, subdistrict in rows
+    ]
 
 
 @main.route("/dashboard")
 def dashboard():
+    """Render the dashboard shell quickly.
+
+    Heavy data (Forecast and official warnings) is loaded by the browser
+    after the HTML shell is visible. This keeps navigation snappy and avoids
+    making page rendering wait for an external TMD request.
+    """
     if current_user.is_authenticated:
         areas = (
             TrackedArea.query
@@ -169,29 +164,14 @@ def dashboard():
             .all()
         )
     else:
-        # Guests can view the public dashboard, but personal tracked areas
-        # are never exposed. The public Forecast API supplies cached weather
-        # locations instead.
         areas = []
-
-    weather_by_area = get_latest_weather_by_province(areas)
-
-    warnings = get_weather_warnings(
-        force_refresh=request.args.get("warning_refresh") == "1"
-    )
 
     return render_template(
         "dashboard.html",
         areas=areas,
-        warnings=warnings,
-        weather_by_area=weather_by_area,
         provinces=THAI_PROVINCES,
         is_public_dashboard=not current_user.is_authenticated,
-        public_forecast_locations=(
-            get_public_forecast_areas()
-            if not current_user.is_authenticated
-            else []
-        ),
+        public_forecast_locations=[],
     )
 
 
@@ -408,8 +388,14 @@ def api_forecast():
 
 @main.route("/api/forecast/all")
 def api_forecast_all():
+    """Return all requested forecast areas with one database read.
+
+    The previous implementation issued one SQL query per area. Grouping a
+    single 24-hour result set avoids N+1 queries and makes large dashboards
+    noticeably faster.
+    """
     if current_user.is_authenticated:
-        areas = (
+        tracked_areas = (
             TrackedArea.query
             .filter_by(user_id=current_user.id)
             .order_by(
@@ -427,7 +413,7 @@ def api_forecast_all():
                 area.district or "",
                 area.subdistrict or "",
             )
-            for area in areas
+            for area in tracked_areas
         ]
     else:
         locations = [
@@ -441,27 +427,50 @@ def api_forecast_all():
             in enumerate(get_public_forecast_areas(), start=1)
         ]
 
+    if not locations:
+        return jsonify({
+            "ok": True,
+            "public": not current_user.is_authenticated,
+            "areas": [],
+        })
+
+    now = datetime.utcnow()
+    end = now + timedelta(hours=24)
+    provinces = sorted({location[1] for location in locations if location[1]})
+
+    query = ForecastData.query.filter(
+        ForecastData.forecast_at >= now,
+        ForecastData.forecast_at <= end,
+    )
+    if provinces:
+        query = query.filter(ForecastData.province.in_(provinces))
+
+    rows = (
+        query
+        .order_by(ForecastData.forecast_at.asc())
+        .all()
+    )
+
+    grouped = {}
+    for row in rows:
+        key = (
+            row.province,
+            row.district or "",
+            row.subdistrict or "",
+        )
+        grouped.setdefault(key, []).append(serialize_forecast(row))
+
     result = []
-
     for area_id, province, district, subdistrict in locations:
-        rows = get_forecast_for_area(
-            province=province,
-            district=district or None,
-            subdistrict=subdistrict or None,
-            hours=24,
-        )
-
-        items = [serialize_forecast(row) for row in rows]
-        result.append(
-            {
-                "area_id": area_id,
-                "province": province,
-                "district": district,
-                "subdistrict": subdistrict,
-                "items": items,
-                "risk_summary": summarize_forecast(items),
-            }
-        )
+        items = grouped.get((province, district, subdistrict), [])
+        result.append({
+            "area_id": area_id,
+            "province": province,
+            "district": district,
+            "subdistrict": subdistrict,
+            "items": items,
+            "risk_summary": summarize_forecast(items),
+        })
 
     return jsonify({
         "ok": True,

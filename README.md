@@ -97,3 +97,12 @@ python run.py
 ## ความหมายของระดับสี
 
 ระดับสีบน Dashboard เป็นตัวชี้วัดของแอปพลิเคชันจากข้อมูล Forecast เช่น ฝนและลม ไม่ใช่ประกาศเตือนภัยอย่างเป็นทางการ รายละเอียดการประมวลผลอยู่ใน `floodalert/weather_service.py` และ `floodalert/risk_service.py`
+
+## Performance v2
+
+- Dashboard HTML renders without waiting for TMD warning calls.
+- Leaflet and Chart.js load only on the dashboard.
+- Forecast and warning requests start in parallel after the dashboard shell is visible.
+- Forecast-all API groups a single 24-hour database read instead of N+1 queries.
+- Browser session cache shows the last dashboard data immediately for up to 60 seconds, then revalidates in the background.
+- The public home prefetches the lightweight dashboard shell.

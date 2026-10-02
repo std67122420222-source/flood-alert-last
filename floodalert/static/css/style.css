@@ -1760,3 +1760,25 @@ body {
         height: 290px;
     }
 }
+
+/* Performance UI: lightweight skeleton shown while background data loads. */
+.loading-shimmer {
+    display: block;
+    border-radius: 10px;
+    background: linear-gradient(90deg, #edf3f7 25%, #f8fbfd 37%, #edf3f7 63%);
+    background-size: 400% 100%;
+    animation: floodalert-shimmer 1.4s ease infinite;
+}
+
+.warning-shimmer-title { height: 22px; width: 42%; }
+.warning-shimmer-line { height: 14px; width: 86%; margin-top: 12px; }
+.warning-shimmer-line.short { width: 60%; }
+
+@keyframes floodalert-shimmer {
+    0% { background-position: 100% 0; }
+    100% { background-position: 0 0; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+    .loading-shimmer { animation: none; }
+}
